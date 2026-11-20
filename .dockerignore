@@ -1,0 +1,7 @@
+*
+!Dockerfile
+!tools/
+!tools/*.py
+!web/
+!web/*
+**/__pycache__

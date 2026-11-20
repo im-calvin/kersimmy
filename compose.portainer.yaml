@@ -1,0 +1,25 @@
+# Load a locally built image on the Portainer Docker host or set READER_IMAGE.
+# Set CLOUDFLARED_NETWORK to an existing network shared with cloudflared.
+services:
+  reader:
+    image: ${READER_IMAGE:-translation-reader:local}
+    restart: unless-stopped
+    environment:
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
+      BACKUP_KEEP: "${BACKUP_KEEP:-96}"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - reader_data:/data
+    networks:
+      tunnel:
+        aliases:
+          - translation-reader
+    stop_grace_period: 30s
+volumes:
+  reader_data:
+networks:
+  tunnel:
+    external: true
+    name: ${CLOUDFLARED_NETWORK:?Set CLOUDFLARED_NETWORK to the existing cloudflared Docker network}

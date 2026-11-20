@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Library · Translation Reader</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<main class="library">
+  <header class="masthead"><a class="wordmark" href="./">Translation Reader</a><span class="device-label">Your words, your workspace</span></header>
+  <section class="intro"><p class="eyebrow">THE LIBRARY</p><h1>A place for your next chapter.</h1><p>Bring a manuscript. Read closely. Make it your own.</p></section>
+  <div class="library-actions"><button class="primary" id="add-book">＋ Add manuscript</button><button id="restore">Restore backup</button><button id="backup-library">Back up library</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
+  <p id="message" role="status" aria-live="polite"></p>
+  <section id="books" class="book-grid" aria-label="Your books"></section>
+  <section id="current-project" class="current-project" hidden><div><p class="eyebrow">FROM YOUR LOCAL PROJECT</p><h2 id="current-title">Current manuscript</h2><p>Bring the source into your library.</p></div><div class="actions"><button id="import-current">Add to library</button><a id="original-reader" class="button subtle" href="legacy/index.html" hidden>Original reader ↗</a></div></section>
+  <footer><p>Books and drafts are saved in SQLite on your server, with automatic backups.</p></footer>
+</main>
+<dialog id="import-dialog">
+  <form id="import-form">
+    <div class="dialog-heading"><div><p class="eyebrow">A NEW PROJECT</p><h2>Add a manuscript</h2></div><button type="button" class="icon" id="close-import" aria-label="Close import">×</button></div>
+    <label class="file-box">Choose a manuscript<input id="manuscript" type="file" accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required><small>Plain text or Word .docx · up to 30 MB · parsed by Python on your server</small></label>
+    <label>Book title<input id="book-title" required maxlength="200" placeholder="The title on your bookshelf"></label>
+    <div class="fields"><label>Encoding<select id="encoding"><option value="auto">Detect automatically</option><option value="utf-8">UTF-8</option><option value="gb18030">GB18030 / GBK</option><option value="big5">Big5</option><option value="utf-16le">UTF-16 LE</option><option value="utf-16be">UTF-16 BE</option></select></label><label>Paragraphs<select id="paragraph-mode"><option value="auto">Detect automatically</option><option value="line">One per line</option><option value="blank">Separated by blank lines</option></select></label><label>Chapters<select id="heading-mode"><option value="auto">Chinese / English headings</option><option value="single">One chapter (entire file)</option><option value="custom">Custom heading pattern</option></select></label></div>
+    <label>Volumes<select id="volume-mode"><option value="auto">Detect Chinese / English volume headings</option><option value="none">No volume headings</option></select></label>
+    <label id="custom-heading" hidden>Chapter heading pattern<input id="heading-regex" placeholder="^Part (\d+): (.*)$" spellcheck="false"><small>Python regular expression, without surrounding slashes. Capture group 1 is the number; group 2 is the optional title.</small></label>
+    <p class="muted">Word paragraphs are preserved automatically. Inserted revisions are included; deleted text is excluded.</p>
+    <p id="import-error" class="error" role="alert"></p>
+    <section id="preview" hidden><div class="preview-top"><h3>Check your chapters</h3><span id="preview-summary"></span></div><p id="preview-warnings"></p><label>Preview chapter<select id="preview-chapter"></select></label><div id="preview-text" class="source-preview" lang="zh"></div></section>
+    <div class="dialog-actions"><button type="button" id="parse">Preview manuscript</button><button type="submit" class="primary" id="confirm-import" disabled>Add to library</button></div>
+  </form>
+</dialog>
+<dialog id="volumes-dialog" aria-labelledby="volumes-title">
+  <form id="volumes-form">
+    <div class="dialog-heading"><h2 id="volumes-title">Organize volumes</h2><button type="button" id="close-volumes" aria-label="Close volumes">×</button></div>
+    <p id="volumes-book"></p>
+    <p>Select chapters, enter a volume name, then apply. Leave the name empty to remove their volume.</p>
+    <div class="volume-controls"><label>Volume name<input id="volume-name" list="volume-names" maxlength="200"></label><datalist id="volume-names"></datalist><button type="button" id="assign-volume">Apply to selected</button></div>
+    <label><input type="checkbox" id="select-all-chapters"> Select all chapters</label>
+    <div id="volume-chapters"></div>
+    <p id="volumes-error" class="error" role="alert"></p>
+    <div class="dialog-actions"><button type="button" id="cancel-volumes">Cancel</button><button type="submit" class="primary" id="save-volumes">Save organization</button></div>
+  </form>
+</dialog>
+<script type="module" src="library.js"></script>
+</body></html>

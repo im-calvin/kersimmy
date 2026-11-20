@@ -1,0 +1,19 @@
+services:
+  reader:
+    build: .
+    image: translation-reader:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
+      PORTABLE_JSON_SNAPSHOTS: "${PORTABLE_JSON_SNAPSHOTS:-1}"
+      BACKUP_KEEP: "96"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - reader_data:/data
+    stop_grace_period: 30s
+volumes:
+  reader_data:

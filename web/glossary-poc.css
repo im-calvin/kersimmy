@@ -1,0 +1,60 @@
+#glossary-dialog {
+  box-sizing: border-box;
+  width: min(48rem, 94vw);
+  max-height: 85vh;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: .55rem;
+  color: var(--ink);
+  background: var(--bg);
+  font-size: 14px;
+}
+#glossary-dialog::backdrop { background: #28332365; }
+#glossary-dialog h2 { margin: 0; font-size: 18px; }
+#glossary-dialog .glossary-table { overflow-x: auto; }
+#glossary-dialog table { width: 100%; border-collapse: collapse; }
+#glossary-dialog th, #glossary-dialog td {
+  padding: .45rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+#glossary-dialog input {
+  width: 100%;
+  min-width: 7rem;
+  padding: .4rem;
+  border: 1px solid var(--line);
+  border-radius: .25rem;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+}
+#glossary-dialog .glossary-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+#glossary-dialog button { color: var(--ink); }
+#glossary-dialog button:disabled { opacity: .5; cursor: default; }
+#cn .glossary-term {
+  text-decoration: underline;
+  text-decoration-color: #be3535;
+  text-underline-offset: .16em;
+}
+#glossary-tooltip {
+  position: fixed;
+  z-index: 38;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: .55rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: .4rem;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  box-shadow: 0 3px 12px #29241e24;
+}
+#glossary-tooltip strong { display: block; }
+#glossary-tooltip p { margin: 0; white-space: pre-wrap; }
+#glossary-tooltip strong:not(:empty) + p { margin-top: .2rem; }
+#glossary-tooltip :empty { display: none; }
