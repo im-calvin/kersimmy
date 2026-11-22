@@ -3,7 +3,12 @@ import html
 import re
 
 # Opt-in for file configurations; the upload form enables this for new books.
-VOLUME_HEADING_REGEX = r'^\s*(?:第\s*[0-9０-９零〇一二两三四五六七八九十百千]+\s*[卷部]|(?i:Volume|Vol\.?)\s+[0-9０-９]+)(?:\s*[:：.、\-–—]\s*|\s+|$).*?\s*$'
+VOLUME_HEADING_REGEX = r'^\s*(?:第\s*[0-9０-９零〇一二两三四五六七八九十百千]+\s*[卷部]|(?i:Volume|Vol\.?)\s+[0-9０-９]+)(?:\s*[:：.、·\-–—]\s*|\s+|$).*?\s*$'
+
+BONUS_VOLUME_HEADING = re.compile(r'^\s*番外篇(?:\s+\S.{0,79})?\s*$')
+BONUS_CHAPTER_HEADING = re.compile(
+    r'^\s*番外\s*([0-9０-９零〇一二两三四五六七八九十百千]+)(?:\s+|\s*[:：]\s*|$)(.*?)\s*$'
+)
 
 # Some Word manuscripts repeat the volume on every chapter heading.
 VOLUME_CHAPTER_HEADING = re.compile(

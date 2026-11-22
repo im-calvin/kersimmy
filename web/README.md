@@ -14,7 +14,9 @@ SQLite saves your work and makes it available to other browsers using this serve
 
 1. Click Add manuscript and choose `.txt` or `.docx`.
 2. Enter its title. Leave encoding and paragraph layout on automatic initially.
-3. Click Preview manuscript and inspect its chapters and paragraphs.
+3. Click **Preview manuscript**. The chapter list shows the detected labels and
+   the selected chapter’s opening paragraphs. Use **Chapter title** to add or
+   correct its title before importing.
 4. Add to library, then open the book.
 
 Default headings include 第1章, 第一回, and Chapter 1. Use One chapter for an
@@ -34,13 +36,20 @@ revisions retained and deleted text excluded. PDF and binary `.doc` need convers
 New uploads detect headings such as `第一卷 晨光` and `Volume 1: Dawn`. Choose
 No volume headings to keep those lines in the chapter text. Chapters may restart
 numbering in different volumes; the reader displays their original numbers while
-keeping their drafts distinct. Navigation groups chapters under their volume names.
+keeping their drafts distinct. The preview and reader group chapters under
+their volume names. Automatic import also groups numbered `番外` stories under
+a `番外篇` heading.
 
-For an existing book, click Organize volumes on its library card. Select chapters,
-enter a volume name and apply, then Save organization. Applying an empty name clears
-the assignment. Existing chapter keys, drafts, comments, formatting, timing and
-review text remain intact. The save checks the book revision, so concurrent edits
-require reopening the organizer before retrying.
+For an existing book, click **Edit chapters** on its library card. Edit titles
+directly or select chapters and assign a volume. Applying an empty volume name
+clears the assignment. **Save chapters** keeps chapter keys and draft state
+intact. The save checks the book revision, so concurrent edits require reopening
+the organizer before retrying.
+
+Use **Edit chapters → Recheck import** to upload the original file again and
+try different parsing settings. You can apply the new titles and volume metadata
+if the chapter IDs, order, and source paragraphs still match. If the source or
+chapter boundaries change, use **Add manuscript** to import a separate copy.
 
 JSON backups and Word exports retain volume structure. Plain text backups continue
 to use unique, book-wide `Chapter N` headings for reliable text import. When pasting
@@ -50,24 +59,28 @@ before each set of chapters; reopening the review editor emits this structure.
 ## Draft and review
 
 The drafting interface is the original reader: source on the left, English on the
-right, paragraph synchronization, contextual term search, statistics, repeated
-words, and configurable words per page. The walkthrough opens on the first visit
-in each browser and highlights each control in turn. Open it again from
+right, paragraph synchronization, contextual term search, statistics,
+and configurable words per page. The walkthrough opens when you open the
+first draft you added through **Add manuscript** in that browser. Replay it from
 **View → Walkthrough**. Use I or Cmd/Ctrl+I
 for italics. Select a translation passage and choose the Add comment speech bubble
 beside the selection.
+
+To add or correct time spent on a chapter, open that chapter and use
+**Stats → Current chapter time (minutes) → Save time**. The value replaces the
+chapter’s recorded time. Full project and library JSON backups include it.
 Use the sun or moon icon under **View** in the draft, or in the library or review
 toolbar, to switch themes. The reader follows your system theme until you choose
 a theme, then remembers it in your browser.
 Click blue-highlighted text to read or edit its note. If an edit detaches a comment,
 select its replacement passage and use the reattach button below the English
-pane. Under **Exports**, set the Word comment author, download a DOCX with
-italics and native Word comments, or copy the current chapter for Google Docs.
+pane. Set the Word comment author under **View**. Use **Exports** to download a
+DOCX with italics and native Word comments or copy the current chapter for Google Docs.
 Find searches the whole book. Queries containing
 Chinese characters look in the source first, and other queries start in the
 translation. Find tries the other side if there are no matches. Show more
 exposes results beyond the first 40. Search is literal and case-sensitive,
-and counts refer to matching paragraphs. Smart quotes remain disabled in hosted
+and Find shows both the number of matches and the number of matching paragraphs. Smart quotes remain disabled in hosted
 pages, and the SOURCE/YOUR TRANSLATION labels are absent.
 
 Stats includes Choose GIF and Remove GIF. The image is stored with the book and
@@ -81,12 +94,16 @@ original close buttons also work. The library/import form uses native dialogs.
 
 ## Saving, sync, migration
 
-Wait for Synced to server before closing. Pending changes retain a local recovery
-copy and retry after connection interruptions. Clean pages refresh when another
-device saves; conflicting edits stop with a recovery message rather than silently
-replacing drafts. If saving fails, **Download recovery backup** is available
-beside the sync status. It preserves source, drafts, review text, settings,
-and GIF in the compatible JSON format.
+Wait for **Available offline** the first time you open a draft online. You can
+then refresh and edit that draft without a connection using the same browser and
+address. The library and imports require a connection. Draft changes stay on the
+device until the editor shows **Synced to server**.
+
+Clean pages refresh when another device saves. If there are pending edits, the
+server compares the book revision and rejects an older write. Your local draft
+stays open across refreshes. **Download recovery backup** preserves the local
+copy as JSON. **Use server version** discards the pending edits after you confirm
+and reloads the latest saved draft.
 
 Existing SQLite data and web-library JSON backups remain supported. Book links
 from the old web reader redirect to the original generated reader. Import browser

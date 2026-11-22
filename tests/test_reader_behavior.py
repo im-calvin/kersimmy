@@ -92,6 +92,9 @@ def test_draft_walkthrough_spotlights_each_step_and_can_be_reopened(reader):
     page = reader['page']
     walkthrough = page.get_by_role('complementary', name='Draft walkthrough')
     spotlight = page.locator('#draft-help-spotlight')
+    expect(walkthrough).to_be_hidden()
+    page.locator('.reader-options summary').click()
+    page.get_by_role('button', name='Walkthrough', exact=True).click()
     expect(walkthrough.get_by_role('heading', name='Choose a chapter')).to_be_visible()
     expect(spotlight).not_to_have_css('box-shadow', 'none')
     walkthrough.get_by_role('button', name='Next').click()
@@ -113,7 +116,7 @@ def test_draft_walkthrough_spotlights_each_step_and_can_be_reopened(reader):
         ('Write your translation', '#ta'),
         ('Use italics', '#italic'),
         ('Link Chinese and English', '#sy'),
-        ('Leave a comment', '#draft-help-comment-preview'),
+        ('Leave a comment', '#ta'),
         ('Export to Word', '#exports-trigger'),
     ]
     for index, (heading, target) in enumerate(steps):
@@ -127,6 +130,59 @@ def test_draft_walkthrough_spotlights_each_step_and_can_be_reopened(reader):
     walkthrough.get_by_role('button', name='Start translating').click()
     expect(walkthrough).to_be_hidden()
     expect(page.get_by_role('textbox', name='Translation')).to_be_focused()
+
+
+def test_walkthrough_comment_step_opens_the_real_comment_composer(reader):
+    page = reader['page']
+    walkthrough = page.get_by_role('complementary', name='Draft walkthrough')
+    page.locator('.reader-options summary').click()
+    page.get_by_role('button', name='Walkthrough', exact=True).click()
+    for _ in range(4):
+        walkthrough.get_by_role('button', name='Next').click()
+    expect(walkthrough.get_by_role('heading')).to_have_text('Leave a comment')
+    add_comment = page.get_by_role('button', name='Add comment', exact=True)
+    expect(add_comment).to_be_hidden()
+    editor = page.get_by_role('textbox', name='Translation', exact=True)
+    editor.click(position={'x': 40, 'y': 40})
+    editor.fill('Try a real comment.')
+    editor.press('Home')
+    editor.press('Shift+End')
+    expect(walkthrough).to_be_visible()
+    expect(add_comment).to_be_visible()
+    spot = page.locator('#draft-help-spotlight').bounding_box()
+    button = add_comment.bounding_box()
+    assert spot['x'] <= button['x'] and button['x'] + button['width'] <= spot['x'] + spot['width']
+    assert spot['y'] <= button['y'] and button['y'] + button['height'] <= spot['y'] + spot['height']
+    add_comment.click()
+    expect(walkthrough).to_be_hidden()
+    composer = page.get_by_role('dialog', name='Add comment', exact=True)
+    expect(composer.locator('blockquote')).to_have_text('Try a real comment.')
+    composer.get_by_label('Comment', exact=True).fill('A note from the walkthrough.')
+    composer.get_by_role('button', name='save comment').click()
+    expect(page.locator('#comment-marks span').first).to_be_visible()
+
+
+def test_walkthrough_auto_opens_only_for_first_added_manuscript(page, reader_environment):
+    base = reader_environment['base']
+    walkthrough = page.get_by_role('complementary', name='Draft walkthrough')
+    for name, show_tour in [('First upload', True), ('Second upload', False)]:
+        page.goto(base)
+        page.get_by_role('button', name='Add manuscript').click()
+        page.locator('#manuscript').set_input_files({
+            'name': name + '.txt', 'mimeType': 'text/plain', 'buffer': '第一章 测试\n正文'.encode(),
+        })
+        page.get_by_role('button', name='Preview manuscript').click()
+        page.get_by_role('button', name='Add to library', exact=True).click()
+        card = page.locator('.book-card').filter(has=page.get_by_role('heading', name=name, exact=True))
+        card.get_by_role('link').click()
+        expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
+        if show_tour:
+            expect(walkthrough).to_be_visible()
+        else:
+            expect(walkthrough).to_be_hidden()
+        page.reload()
+        expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
+        expect(walkthrough).to_be_hidden()
 
 
 def test_chapter_drafts_reload_and_alignment(reader):
@@ -168,7 +224,7 @@ def test_search_statistics_and_dismissal(reader):
     expect(page.locator('#stats')).not_to_have_class('on')
     page.get_by_role('button', name='find', exact=True).click()
     page.locator('#q').fill('月光')
-    expect(page.locator('#verdict')).to_have_text('Found in 3 source paragraphs across 2 chapters.')
+    expect(page.locator('#verdict')).to_have_text('3 matches in 3 source paragraphs across 2 chapters.')
     expect(page.locator('#hits')).to_contain_text('后来')
     dismiss(reader, '#find')
     expect(page.locator('#find')).not_to_have_class('on')
@@ -180,6 +236,17 @@ def test_exports_preserve_source_and_draft(reader):
     page.emulate_media(color_scheme='dark')
     page.locator('#ta').fill(DRAFT)
     saved(reader)
+    for minutes in ('45', '70'):
+        page.get_by_role('button', name='stats', exact=True).click()
+        page.get_by_label('Current chapter time (minutes)').fill(minutes)
+        page.get_by_role('button', name='Save time').click()
+        dismiss(reader, '#stats')
+        saved(reader)
+    page.reload()
+    page.get_by_role('button', name='stats', exact=True).click()
+    expect(page.get_by_label('Current chapter time (minutes)')).to_have_value('70')
+    expect(page.locator('#cards')).to_contain_text('1h 10m')
+    dismiss(reader, '#stats')
     expect(page.get_by_role('button', name='Word', exact=True)).to_be_hidden()
     expect(page.get_by_role('button', name='Download recovery backup')).to_be_hidden()
     menu = open_exports(page)
@@ -188,7 +255,7 @@ def test_exports_preserve_source_and_draft(reader):
     bounds = panel.bounding_box()
     assert 0 <= bounds['x'] < bounds['x'] + bounds['width'] <= 410
     assert 0 <= bounds['y'] < bounds['y'] + bounds['height'] <= 720
-    expect(menu.get_by_label('Word comment author')).to_be_visible()
+    expect(menu.get_by_label('Word comment author')).to_have_count(0)
     expect(menu.get_by_role('button', name='Copy for Google Docs')).to_be_visible()
     with page.expect_download() as event:
         menu.get_by_role('button', name='Draft text backup', exact=True).click()
@@ -201,6 +268,7 @@ def test_exports_preserve_source_and_draft(reader):
     assert payload['version'] == 1
     entry = payload['books'][0]
     assert entry['state']['drafts']['1'] == DRAFT
+    assert entry['state']['times'] == {'1': 4200000}
     assert entry['book']['chapters'][1]['paras'][0] == '后来月光'
     page.keyboard.press('Escape')
     expect(menu.get_by_role('button', name='Word', exact=True)).to_be_hidden()

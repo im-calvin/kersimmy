@@ -134,7 +134,8 @@ def test_docx_transfers_multiline_comment_italics_and_author(reader):
     page.get_by_role('button', name='Italic', exact=True).click()
     select(page, start, start + len(passage.encode('utf-16-le')) // 2)
     add_comment(page, note)
-    open_exports(page).get_by_label('Word comment author').fill('Lin & 李')
+    page.locator('.reader-options summary').click()
+    page.get_by_label('Word comment author').fill('Lin & 李')
     saved(reader)
     page.reload()
 
@@ -243,6 +244,7 @@ def test_hosted_comment_offline_recovery(page, reader_environment):
     book_id = response.json()[0]['id']
     page.goto(base + '/books/' + book_id + '/draft')
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
+    expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
     page.context.set_offline(True)
     try:
         select(page, 0, 7)
@@ -250,6 +252,9 @@ def test_hosted_comment_offline_recovery(page, reader_environment):
         expect(page.locator('#reader-server-status')).to_contain_text('Connection lost')
         recovery = page.evaluate("id=>JSON.parse(localStorage.getItem('original-reader-pending:'+id))", book_id)
         assert recovery['state']['comments']['1'][0]['text'] == 'Note written without a connection.'
+        page.reload()
+        click_commented_passage(page, 'Offline')
+        expect(page.locator('#comment-list')).to_contain_text('Note written without a connection.')
     finally:
         page.context.set_offline(False)
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server', timeout=15000)
@@ -281,9 +286,9 @@ def test_click_underlined_comment_and_export_author(reader):
     dialog.get_by_label('Comment', exact=True).fill('Check the phrase.')
     dialog.get_by_label('Comment', exact=True).press('Enter')
     expect(dialog).to_be_hidden()
-    menu = open_exports(page)
+    page.locator('.reader-options summary').click()
     expect(page.get_by_role('button', name='Chapter comments', exact=True)).to_have_count(0)
-    menu.get_by_label('Word comment author').fill('A & B')
+    page.get_by_label('Word comment author').fill('A & B')
     saved(reader)
     page.reload()
     _, comments = word(page)

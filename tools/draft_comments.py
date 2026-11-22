@@ -179,6 +179,7 @@ function updateCommentButton(){
   const anchor=commentDialog.open?null:passageBox(selectedPassage(),bounds);
   commentAdd.hidden=!anchor;
   if(anchor)positionPassageControl(commentAdd,anchor,bounds,6);
+  if(guidingComment())positionDraftHelp();
 }
 document.addEventListener('selectionchange',updateCommentButton);
 ta.addEventListener('scroll',()=>{paintCommentHighlights();updateCommentButton();positionComments()},{passive:true});

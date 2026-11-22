@@ -124,12 +124,17 @@ def test_docx_volume_preview_import_and_restore(page, reader_environment, source
     assert preview_response.value.status == 200, preview_response.value.text()
     expect(page.locator('#preview-summary')).to_contain_text('3 chapters')
     night = '第2卷 Night' if '第2卷' in source else 'Volume 2: Night'
+    assert page.locator('#preview-chapter optgroup').evaluate_all('groups => groups.map(g => g.label)') == [
+        'Volume 1: Dawn', night,
+    ]
     assert page.locator('#preview-chapter option').all_text_contents() == [
-        'Volume 1: Dawn · Chapter 1 · 开始',
-        f'{night} · Chapter 1 · 后来',
-        f'{night} · Chapter 2 · 结束',
+        'Chapter 1 · 开始',
+        'Chapter 1 · 后来',
+        'Chapter 2 · 结束',
     ]
     page.locator('#preview-chapter').select_option('2')
+    expect(page.get_by_label('Chapter title', exact=True)).to_have_value('后来')
+    page.get_by_label('Chapter title', exact=True).fill('新的标题')
     expect(page.locator('#preview-text')).to_contain_text('第二卷的月光')
     expect(page.locator('#preview-text')).not_to_contain_text('Volume 2')
     page.locator('#confirm-import').click()
@@ -137,6 +142,7 @@ def test_docx_volume_preview_import_and_restore(page, reader_environment, source
     expect(card).to_contain_text('2 VOLUMES')
     card.get_by_role('link').click()
     entry = project(page)
+    assert entry['book']['chapters'][1]['title'] == '新的标题'
     page.goto(base)
     page.locator('#restore-file').set_input_files({'name': 'volumes.json', 'mimeType': 'application/json', 'buffer': json.dumps({'format': 'translation-reader', 'version': 1, 'books': [entry]}).encode()})
     expect(page.locator('#message')).to_contain_text('Restored 1 book')
@@ -156,7 +162,7 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     book_id = response.json()[0]['id']
     page.goto(base)
     card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Organize existing', exact=True))
-    card.get_by_role('button', name='Organize volumes', exact=True).click()
+    card.get_by_role('button', name='Edit chapters', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
     page.locator('#select-all-chapters').check()
     page.locator('#volume-name').fill('First volume <safe>')
@@ -169,8 +175,9 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     page.locator('#save-volumes').click()
     expect(page.locator('#volumes-error')).to_contain_text('This book changed')
     page.locator('#cancel-volumes').click()
-    card.get_by_role('button', name='Organize volumes', exact=True).click()
+    card.get_by_role('button', name='Edit chapters', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
+    page.get_by_role('textbox', name='Chapter 1', exact=True).fill('New title <safe>')
     page.locator('#volume-chapters input[data-chapter="1"]').check()
     page.locator('#volume-name').fill('First volume <safe>')
     page.locator('#assign-volume').click()
@@ -182,7 +189,7 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     with page.expect_request('**/volumes') as volume_request:
         page.locator('#save-volumes').click()
     assert volume_request.value.post_data_json['volumes'] == {'1': 'First volume <safe>', '2': 'Second volume'}
-    expect(page.locator('#message')).to_contain_text('Volume organization saved')
+    expect(page.locator('#message')).to_contain_text('Chapter changes saved')
     bundle = page.request.get(base + '/api/books/' + book_id + '/bundle').json()
     for key, value in state.items():
         assert bundle['state'][key] == (remote[key] if key == 'times' else value)
@@ -193,6 +200,7 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     assert response.status == 409
     page.goto(base + '/books/' + book_id + '/draft')
     expect(page.locator('#sel optgroup').first).to_have_attribute('label', 'First volume <safe>')
+    expect(page.locator('#sel option').first).to_contain_text('New title <safe>')
     expect(page.locator('#ta em')).to_have_text('First')
 
 
@@ -214,6 +222,18 @@ def test_volume_parser_preserves_existing_numbering_and_optional_detection(tmp_p
         parse_source(dict(cfg, volume_heading_regex=VOLUME_HEADING_REGEX))
 
 
+def test_automatic_import_separates_numbered_bonus_stories():
+    from base64 import b64encode
+    from reader_server import parse_upload
+
+    source = '第一卷·狐美人\n第1章 曜金三圣\n正文。\n番外篇\n番外篇 实体番外\n番外1 飞天猫\n番外正文。'
+    preview = parse_upload({'name': 'sample.txt', 'content': b64encode(source.encode()).decode()})
+    assert preview['chapters'] == [
+        {'no': 1, 'number': 1, 'title': '曜金三圣', 'volume': '第一卷·狐美人', 'paras': ['正文。']},
+        {'no': 2, 'number': 1, 'title': '飞天猫', 'volume': '番外篇 实体番外', 'paras': ['番外正文。']},
+    ]
+
+
 def test_volume_api_invalid_assignment_is_atomic_and_clean_reader_refreshes(page, reader_environment):
     base = reader_environment['base']
     chapters = [{'no': 1, 'number': 1, 'volume': 'One', 'title': 'A', 'paras': ['正文一']},
@@ -233,3 +253,40 @@ def test_volume_api_invalid_assignment_is_atomic_and_clean_reader_refreshes(page
     assert response.status == 200
     expect(page.locator('#sel optgroup').first).to_have_attribute('label', 'Renamed one', timeout=15000)
     expect(page.locator('#ta')).to_have_js_property('value', 'Saved draft.')
+
+
+def test_recheck_import_updates_titles_only_when_source_matches(page, reader_environment):
+    base = reader_environment['base']
+    original = {'no': 1, 'title': '', 'paras': ['原稿内容。']}
+    created = page.request.post(base + '/api/import', data={'books': [{
+        'book': {'title': 'Rechecked book', 'chapters': [original]},
+        'state': {'drafts': {'1': 'Saved translation.'}, 'offsets': {'1': -1}},
+    }]})
+    assert created.status == 201
+    endpoint = base + '/api/books/' + created.json()[0]['id']
+    page.goto(base)
+    card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Rechecked book', exact=True))
+    card.get_by_role('button', name='Edit chapters', exact=True).click()
+    page.get_by_role('button', name='Recheck import').click()
+    page.locator('#manuscript').set_input_files({
+        'name': 'manuscript.txt', 'mimeType': 'text/plain', 'buffer': '第1章 新标题\n改动内容。'.encode(),
+    })
+    page.locator('#parse').click()
+    expect(page.locator('#import-error')).to_contain_text('Chapter boundaries or source text changed')
+    expect(page.locator('#confirm-import')).to_be_disabled()
+    before = page.request.get(endpoint + '/bundle').json()
+    invalid = page.request.put(endpoint + '/chapter-import', data={
+        'preview': {'chapters': [{**original, 'paras': ['改动内容。']}]}, 'expectedRevision': 0,
+    })
+    assert invalid.status == 400
+    assert page.request.get(endpoint + '/bundle').json() == before
+    page.locator('#manuscript').set_input_files({
+        'name': 'manuscript.txt', 'mimeType': 'text/plain', 'buffer': '第1章 新标题\n原稿内容。'.encode(),
+    })
+    page.locator('#parse').click()
+    expect(page.get_by_label('Chapter title', exact=True)).to_have_value('新标题')
+    page.get_by_role('button', name='Update existing book').click()
+    expect(page.locator('#message')).to_contain_text('Manuscript import updated')
+    after = page.request.get(endpoint + '/bundle').json()
+    assert after['book']['chapters'] == [{**original, 'title': '新标题'}]
+    assert after['state'] == {**before['state'], 'revision': 1}

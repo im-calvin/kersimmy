@@ -367,4 +367,5 @@ input[type=file]{
 #volume-chapters{max-height:45vh;overflow:auto;margin:16px 0;border-top:1px solid var(--line)}
 #volumes-dialog .volume-row{display:flex;flex-direction:row;align-items:center;gap:10px;margin:0;padding:10px 2px;border-bottom:1px solid var(--line)}
 #volumes-dialog input[type=checkbox]{width:auto;margin:0}
-.volume-row span{flex:1}.volume-row small{max-width:40%;overflow-wrap:anywhere;color:var(--muted)}
+.volume-row label{flex:1;min-width:0;margin:0}
+.volume-row small{max-width:40%;overflow-wrap:anywhere;color:var(--muted)}

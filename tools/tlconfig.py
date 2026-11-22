@@ -10,7 +10,7 @@ import os
 import re
 import sys
 
-from chapter_structure import VOLUME_CHAPTER_HEADING
+from chapter_structure import BONUS_CHAPTER_HEADING, BONUS_VOLUME_HEADING, VOLUME_CHAPTER_HEADING
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -158,6 +158,8 @@ def parse_source(cfg, verbose=False):
     head = re.compile(cfg['heading_regex'])
     volume_head = re.compile(cfg['volume_heading_regex']) if cfg.get('volume_heading_regex') else None
     volume = ''
+    recognize_bonus = volume_head is not None and cfg.get('combined_volume_headings')
+    bonus_volume = False
 
     mode = cfg['paragraph_mode']
     if enc == 'docx':
@@ -171,20 +173,29 @@ def parse_source(cfg, verbose=False):
     for l in lines:
         combined = VOLUME_CHAPTER_HEADING.match(l) if cfg.get('combined_volume_headings') else None
         if combined:
+            bonus_volume = False
             volume_label, chapter_heading = combined.groups()
             if volume_head:
                 volume = volume_label.strip()
                 if len(volume) > 200:
                     raise ValueError('Volume headings must be 200 characters or fewer.')
             m = head.match(chapter_heading)
+        elif recognize_bonus and BONUS_VOLUME_HEADING.fullmatch(l):
+            volume = l.strip()
+            bonus_volume = True
+            cur = None
+            continue
         elif volume_head and volume_head.fullmatch(l):
             volume = l.strip()
             if len(volume) > 200:
                 raise ValueError('Volume headings must be 200 characters or fewer.')
+            bonus_volume = False
             cur = None
             continue
         else:
             m = head.match(l)
+            if m is None and bonus_volume:
+                m = BONUS_CHAPTER_HEADING.fullmatch(l)
         if m:
             n = to_int(m.group(1))
             if n is None:

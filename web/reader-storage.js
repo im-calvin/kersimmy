@@ -8,20 +8,26 @@ window.readerStart = async function(config, startOriginal) {
   const recovery=document.createElement('button');recovery.textContent='Download recovery backup';
   recovery.hidden=config.mode==='draft';
   const key='original-reader-pending:'+config.id;
+  const offlineCopy=config.mode==='draft'?window.readerOffline?.(config.id):null;
   let state,book,revision,memory={},pending=false,blocked=false,saving=false,timer,generation=0,suppress=false,batchDepth=0,batchChanged=false;
+  let offline=false,conflicted=false,recoveryValue=null;
   const defaults={italics:{},comments:{},drafts:{},positions:{},offsets:{},alignmentGroups:{},times:{},current:null,fontSize:19,smart:false,sync:true,wordsPerPage:null,reviewEnglish:{},reviewMode:'chapter',reviewFontSize:19,legacyStorage:{}};
   const show=(text,error=false)=>{
     status.textContent=text;
     status.classList.toggle('error',error);
     if(config.mode==='draft')recovery.hidden=!error||!book;
+    useServer.hidden=!conflicted;
   };
-  async function request(path,method='GET',body) {
+  async function request(path,method='GET',body,withRelease=false) {
     let response;
     try {response=await fetch('/api/'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});}
     catch {const e=new Error('Connection lost. Work is saved on this device and will retry.');e.retry=true;throw e;}
+    if(!response.ok){
+      const data=await response.json().catch(()=>({}));
+      const e=new Error(data.error||'Server request failed');e.conflict=response.status===409;e.retry=response.status>=500;throw e;
+    }
     const data=await response.json();
-    if(!response.ok){const e=new Error(data.error||'Server request failed');e.conflict=response.status===409;e.retry=response.status>=500;throw e;}
-    return data;
+    return withRelease?{data,release:response.headers.get('X-Kersimmy-Release')}:data;
   }
   function populate() {
     const p=config.prefix;
@@ -43,13 +49,20 @@ window.readerStart = async function(config, startOriginal) {
     return result;
   }
   function recover() {
-    try {localStorage.setItem(key,JSON.stringify({state:snapshot(),revision}));}
-    catch {show('Local recovery is full. Download a recovery backup; keep this page open.',true);}
+    try {
+      const value=JSON.stringify({state:snapshot(),revision});
+      localStorage.setItem(key,value);
+      recoveryValue=value;
+      return true;
+    } catch {show('Local recovery is full. Download a recovery backup; keep this page open.',true);return false;}
+  }
+  function clearRecovery() {
+    if(recoveryValue!==null&&localStorage.getItem(key)===recoveryValue)localStorage.removeItem(key);
   }
   function queue() {
     if(batchDepth){batchChanged=true;return}
     pending=true;generation++;
-    if(!blocked)show('Saving to server…');
+    if(!blocked)show(offline?'Offline. Saving on this device.':'Saving to server…');
     recover();
     clearTimeout(timer);timer=setTimeout(save,400);
   }
@@ -71,10 +84,18 @@ window.readerStart = async function(config, startOriginal) {
     try {
       const result=await request('books/'+config.id+'/state','PUT',{state:payload,expectedRevision:revision});
       revision=result.revision;state={...payload,revision};
-      if(version===generation){pending=false;localStorage.removeItem(key);show('Synced to server');}
+      offline=false;
+      let cached=true;
+      if(offlineCopy){
+        recover();
+        cached=await offlineCopy.remember(state).then(()=>true,()=>false);
+      }
+      if(version===generation){pending=false;if(cached)clearRecovery();show('Synced to server');}
       else recover();
     } catch(e) {
-      blocked=!!e.conflict || !e.retry;show(e.message,true);recover();
+      conflicted=!!e.conflict;
+      blocked=conflicted || !e.retry;offline=!!e.retry;
+      show(e.message,true);recover();
     } finally {
       saving=false;
       if(pending&&!blocked)timer=setTimeout(save,1500);
@@ -87,19 +108,63 @@ window.readerStart = async function(config, startOriginal) {
   };
   window.readerBackup=backup;
   recovery.onclick=backup;
-  const retry=document.createElement('button');retry.textContent='Retry save';retry.onclick=()=>{if(!blocked)save();else show('Download a recovery backup, then reload to resolve conflicting edits.',true)};
-  const bar=document.createElement('div');bar.style.cssText='padding:4px 12px;display:flex;gap:8px';bar.append(recovery,retry);status.after(bar);
+  const retry=document.createElement('button');retry.textContent='Retry save';retry.onclick=()=>{if(!blocked)save();else show('Download a recovery backup to keep your edits.',true)};
+  const useServer=document.createElement('button');useServer.textContent='Use server version';useServer.hidden=true;
+  useServer.onclick=async()=>{
+    if(!confirm('Discard this browser’s conflicting changes? Download a recovery backup first if you want to keep them.'))return;
+    const version=generation;
+    try {
+      await request('books/'+config.id+'/state');
+      if(version!==generation)return;
+      clearRecovery();
+      pending=false;
+      location.reload();
+    } catch(e) {show(e.message,true);}
+  };
+  const offlineStatus=document.createElement('span');offlineStatus.id='reader-offline-status';
+  offlineStatus.textContent='Available offline';offlineStatus.hidden=true;
+  const bar=document.createElement('div');bar.style.cssText='padding:4px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px';bar.append(recovery,useServer,retry,offlineStatus);status.after(bar);
+  if(config.version){
+    const versionLabel=document.createElement('small');
+    versionLabel.textContent='v'+config.version;
+    versionLabel.style.marginInlineStart='auto';
+    bar.append(versionLabel);
+  }
   try {
-    const data=await request('books/'+config.id+'/bundle');
-    book=data.book;state={...defaults,...data.state};revision=state.revision||0;
-    const saved=JSON.parse(localStorage.getItem(key)||'null');
-    if(saved){state={...defaults,...saved.state};pending=true;blocked=saved.revision!==revision;}
+    let data;
+    try {data=await request('books/'+config.id+'/bundle');}
+    catch(e) {
+      if(!e.retry||!offlineCopy)throw e;
+      data=await offlineCopy.load();
+      if(!data)throw new Error('Open this draft online once before using it offline.');
+      offline=true;
+    }
+    book=data.book;state={...defaults,...data.state};
+    if(offlineCopy&&!offline){
+      Promise.all([offlineCopy.remember(state,book),offlineCopy.prepare()])
+        .then(()=>{offlineStatus.hidden=false;})
+        .catch(()=>{offlineStatus.textContent='Offline copy unavailable';offlineStatus.hidden=false;});
+    }
+    const serverRevision=state.revision||0;
+    recoveryValue=localStorage.getItem(key);
+    const saved=JSON.parse(recoveryValue||'null');
+    revision=saved?saved.revision:serverRevision;
+    if(saved){
+      // Older readers could stamp a conflicting recovery with the server's
+      // newer revision while leaving the original revision inside the state.
+      if(Number.isSafeInteger(saved.state.revision))revision=Math.min(revision,saved.state.revision);
+      state={...defaults,...saved.state};pending=true;
+      conflicted=offline?revision<serverRevision:revision!==serverRevision;
+      blocked=conflicted;
+    }
     populate();
     window.CORPUS=book.chapters.map(c=>[c.no,c.title,c.paras,{...(c.volume?{volume:c.volume}:{}),...('number' in c?{number:c.number}:{})}]);
     suppress=true;await startOriginal();suppress=false;
     enableEditors(true);
     document.title=book.title+' · '+(config.mode==='review'?'Review':'Draft');
-    if(saved){recover();if(blocked)show('Recovered work conflicts with a newer server version. Download recovery backup before reloading.',true);else save();}
+    if(conflicted)show('This book changed on another device. Your local changes are still here.',true);
+    else if(offline){offlineStatus.hidden=false;show('Offline. Changes are saved on this device.');}
+    else if(saved)save();
     else show('Synced to server');
     // Original commit writes through the adapter; input recovery closes the
     // original 400 ms debounce window without replacing original editor logic.
@@ -142,10 +207,15 @@ window.readerStart = async function(config, startOriginal) {
     };
     setInterval(async()=>{
       if(document.hidden||pending||saving||blocked||window.readerHasUnsaved?.())return;
-      try {const remote=await request('books/'+config.id+'/state');if(!pending&&!saving&&!blocked&&!window.readerHasUnsaved?.()&&remote.revision!==revision)location.reload();}catch{/* Retry on the next poll. */}
+      try {
+        const {data:remote,release}=await request('books/'+config.id+'/state','GET',undefined,true);
+        if(pending||saving||blocked||window.readerHasUnsaved?.())return;
+        if(remote.revision!==revision||(config.release&&release!==config.release))location.reload();
+        else if(offline){offline=false;show('Synced to server');}
+      }catch{/* Retry on the next poll. */}
     },5000);
     window.addEventListener('online',()=>{if(!blocked)save()});
     document.addEventListener('visibilitychange',()=>{if(document.hidden){window.readerCommit?.();save()}});
-    window.addEventListener('beforeunload',e=>{if(pending){recover();e.preventDefault();e.returnValue=''}});
+    window.addEventListener('beforeunload',e=>{if(pending&&!recover()){e.preventDefault();e.returnValue=''}});
   }catch(e){show('Could not open reader: '+e.message,true);enableEditors(false);}
 };

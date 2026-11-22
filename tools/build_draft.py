@@ -69,8 +69,9 @@ button.act{border:1px solid var(--line);background:var(--control)}
 .exports-menu>div{display:grid;gap:.45rem;width:min(17rem,calc(100vw - 2rem));
   max-height:65vh;overflow:auto;padding:.65rem}
 .exports-menu button{text-align:left;color:var(--ink)}
-.exports-menu label{display:grid;gap:.25rem;color:var(--heading)}
-.exports-menu input{width:100%;font:inherit;color:var(--ink);background:var(--control);
+.reader-menu label{display:grid;gap:.25rem;color:var(--heading)}
+.reader-options label{margin-top:.45rem}
+.reader-menu input{width:100%;font:inherit;color:var(--ink);background:var(--control);
   border:1px solid var(--line);border-radius:4px;padding:.3rem .4rem}
 #snapshot-options:not([hidden]){display:grid;gap:.35rem;border-top:1px solid var(--line);padding-top:.45rem}
 #snapshot-status{margin:0;color:var(--heading)}
@@ -84,9 +85,6 @@ button.act{border:1px solid var(--line);background:var(--control)}
   padding:1rem;border:1px solid var(--line);border-radius:.5rem;
   background:var(--bg);color:var(--ink);box-shadow:0 6px 20px #29241e20;
   font-size:14px;line-height:1.45}
-#draft-help-comment-preview{position:absolute;width:32px;height:32px;display:grid;place-items:center;
-  border:1px solid var(--line);border-radius:4px;background:var(--control);color:var(--ink)}
-#draft-help-comment-preview[hidden]{display:none}
 #draft-help h2{margin:0;font-size:17px}
 #draft-help p{margin:.5rem 0 1rem}
 #draft-help .actions{display:flex;align-items:center;justify-content:flex-end;gap:.5rem}
@@ -131,8 +129,9 @@ button.act{border:1px solid var(--line);background:var(--control)}
   border-bottom:1px solid var(--line);font-size:13px;color:var(--dim)}
 #stats .top b{color:var(--ink);font-size:14px}
 #stats .top .sp{flex:1}
-#wpp{width:4.2rem;font:inherit;color:var(--ink);border:1px solid var(--line);
+#wpp,#chapter-minutes{width:5rem;font:inherit;color:var(--ink);border:1px solid var(--line);
   border-radius:5px;padding:.25rem .4rem;background:var(--control);text-align:right}
+#chapter-time-form{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.7rem 0}
 #stats .body{flex:1;overflow-y:auto;padding:1rem}
 .cards{display:grid;gap:.6rem;padding-bottom:1.1rem;
   grid-template-columns:repeat(3,1fr)}
@@ -150,16 +149,6 @@ button.act{border:1px solid var(--line);background:var(--control)}
 #bar{height:7px;border-radius:4px;background:var(--subtle);overflow:hidden;
   margin:0 0 1.4rem}
 #bar i{display:block;height:100%;background:var(--accent-line)}
-#stats h4{font-size:11px;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--dim);margin:0 0 .6rem;font-weight:600}
-.r{display:flex;align-items:center;gap:.6rem;padding:.33rem 0;font-size:13px}
-.r .w{flex:0 0 7.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.r .b{flex:1;height:11px;background:var(--subtle);border-radius:3px;overflow:hidden}
-.r .b i{display:block;height:100%;background:var(--accent-line);border-radius:3px}
-.r .n{flex:0 0 2.3rem;text-align:right;color:var(--dim);
-  font-variant-numeric:tabular-nums}
-.note{font-size:11.5px;color:var(--dim);padding:1.4rem 0 0;line-height:1.6;
-  max-width:34rem}
 """
 
 JS = r"""
@@ -181,7 +170,6 @@ function bumpTime(){
   if(lastIn)times[cur]=(times[cur]||0)+Math.min(now-lastIn,IDLE);
   lastIn=now;
 }
-/* no reset: chapter time accumulates across every session, permanently */
 let smart=localStorage.getItem(SKEY)!=='0';
 let dirty=false, timer=null;
 
@@ -690,7 +678,11 @@ function findMatches(corpus,query,translation){
   for(const [no,,source] of corpus){
     const paragraphs=translation?stripHead(store[no]||'').split('\n').filter(p=>p.trim()):source;
     for(let i=0;i<paragraphs.length;i++){
-      if(paragraphs[i].includes(query))results.push([no,i+1,paragraphs[i]]);
+      const paragraph=paragraphs[i];
+      let matches=0;
+      for(let index=paragraph.indexOf(query);index!==-1;
+          index=paragraph.indexOf(query,index+query.length))matches++;
+      if(matches)results.push([no,i+1,paragraph,matches]);
     }
   }
   return results;
@@ -712,10 +704,11 @@ function runFind(more=false){
     results=findMatches(C,q,translation);
   }
   const count=results.length;
+  const matches=results.reduce((total,hit)=>total+hit[3],0);
   const chapters=new Set(results.map(hit=>hit[0])).size;
   const side=translation?'translation':'source';
   V.className=count?'recur':'none';
-  V.textContent=count?'Found in '+count+' '+side+(count===1?' paragraph':' paragraphs')
+  V.textContent=count?matches+(matches===1?' match':' matches')+' in '+count+' '+side+(count===1?' paragraph':' paragraphs')
     +' across '+chapters+(chapters===1?' chapter.':' chapters.'):'No matches in the source or translation.';
   const CAP=findLimit;
   R.innerHTML=results.slice(0,CAP).map(h=>
@@ -727,35 +720,14 @@ function runFind(more=false){
 
 /* ---------- project statistics ---------- */
 const WKEY='__PFX__draft:wpp';
-const STOP=new Set(("a about above after again against all am an and any are aren't as at "
-+"be because been before being below between both but by can can't cannot could couldn't "
-+"did didn't do does doesn't doing don't down during each few for from further had hadn't "
-+"has hasn't have haven't having he he'd he'll he's her here hers herself him himself his "
-+"how i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't "
-+"my myself no nor not of off on once only or other ought our ours ourselves out over own "
-+"same shan't she she'd she'll she's should shouldn't so some such than that that's the "
-+"their theirs them themselves then there there's these they they'd they'll they're they've "
-+"this those through to too under until up very was wasn't we we'd we'll we're we've were "
-+"weren't what what's when when's where where's which while who who's whom why why's with "
-+"won't would wouldn't you you'd you'll you're you've your yours yourself yourselves")
-.split(' '));
-
 function allBodies(){
   return Object.keys(store).map(Number).filter(n=>!isNaN(n))
     .sort((a,b)=>a-b).map(n=>[n,stripHead(store[n])]).filter(x=>x[1]);
 }
 function words(t){ return t.split(/\s+/).filter(Boolean) }
-function norm(w){ return w.replace(/[’]/g,"'").replace(/^[^a-z']+|[^a-z']+$/gi,'') }
 function fmtDur(ms){
   const m=Math.round(ms/60000);
   return m<60? m+'m' : Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';
-}
-function bars(rows,el,max){
-  document.getElementById(el).innerHTML = rows.length
-    ? rows.map(r=>'<div class="r"><span class="w">'+esc(r[0])+'</span>'
-       +'<span class="b"><i style="width:'+(r[1]/max*100).toFixed(1)+'%"></i></span>'
-       +'<span class="n">'+r[1]+'</span></div>').join('')
-    : '<div class="r" style="color:var(--dim)">nothing yet</div>';
 }
 function openStats(){
   document.getElementById('stats').classList.add('on'); renderStats();
@@ -765,11 +737,21 @@ function setWpp(){
   const v=Math.max(50,Math.min(1000,+document.getElementById('wpp').value||__WPP__));
   localStorage.setItem(WKEY,v); renderStats();
 }
+function saveChapterTime(event){
+  event.preventDefault();
+  const milliseconds=document.getElementById('chapter-minutes').valueAsNumber*60000;
+  if(!Number.isSafeInteger(milliseconds)||milliseconds<0)return;
+  times[cur]=milliseconds;
+  lastIn=0;
+  localStorage.setItem(TKEY,JSON.stringify(times));
+  count();renderStats();
+}
 function renderStats(){
   if(dirty)commit();
   const bodies=allBodies();
   const wpp=+localStorage.getItem(WKEY)||__WPP__;
   document.getElementById('wpp').value=wpp;
+  document.getElementById('chapter-minutes').value=Math.round((times[cur]||0)/60000);
 
   /* totals */
   let wTotal=0, cjk=0;
@@ -787,7 +769,7 @@ function renderStats(){
   const card=(k,v,s)=>'<div class="card"><div class="k">'+k+'</div><div class="v">'
     +v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
   document.getElementById('cards').innerHTML=
-     card('time on project',fmtDur(msTotal),'typing in this app only')
+     card('time on project',fmtDur(msTotal),'recorded chapter time')
     +card('english words',wTotal.toLocaleString(),
           bodies.length+(bodies.length===1?' chapter':' chapters')+' drafted')
     +card('chinese translated',cjk.toLocaleString(),
@@ -797,26 +779,6 @@ function renderStats(){
     +'__GIF__';
   document.getElementById('bar').innerHTML='<i style="width:'+pct.toFixed(2)+'%"></i>';
 
-  /* tokenise per sentence, so a capital at a sentence start can be discounted */
-  const wc={}, caps={}, lc={};
-  bodies.forEach(([,b])=>{
-    b.split(/(?<=[.!?”"])\s+|\n+/).forEach(sent=>{
-      words(sent).map(norm).filter(Boolean).forEach((t,ix)=>{
-        const k=t.toLowerCase();
-        wc[k]=(wc[k]||0)+1;
-        if(ix===0)return;   /* a capital at sentence start proves nothing */
-        if(/^[A-Z]/.test(t))caps[k]=(caps[k]||0)+1; else lc[k]=(lc[k]||0)+1;
-      });
-    });
-  });
-  /* a name is capitalised away from sentence starts nearly every time */
-  const isName=k=>k!=='i'&&k.length>1&&!STOP.has(k)&&(caps[k]||0)>=2
-    &&(caps[k]||0)/((caps[k]||0)+(lc[k]||0))>=0.8;
-  const top=(obj,filter,cap)=>Object.entries(obj).filter(filter)
-    .sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,cap);
-
-  const wRows=top(wc,([k,v])=>v>1&&!STOP.has(k)&&!isName(k)&&k.length>2,10);
-  bars(wRows,'fw',wRows.length?wRows[0][1]:1);
 }
 
 /* ---------- export ---------- */
@@ -979,21 +941,18 @@ document.addEventListener('click',event=>{
 const draftHelp=document.getElementById('draft-help');
 const helpSpotlight=document.getElementById('draft-help-spotlight');
 const helpCard=document.getElementById('draft-help-card');
-const helpCommentPreview=document.getElementById('draft-help-comment-preview');
 const helpSteps=[...draftHelp.querySelectorAll('section')];
 const helpBack=document.getElementById('draft-help-back');
 const helpNext=document.getElementById('draft-help-next');
 const helpKey='translation-reader:draft-help-v1';
 let helpStep=0;
+function guidingComment(){
+  return !draftHelp.hidden&&helpSteps[helpStep].dataset.target==='#comment-add';
+}
 function positionDraftHelp(){
   if(draftHelp.hidden)return;
-  const target=document.querySelector(helpSteps[helpStep].dataset.target);
-  helpCommentPreview.hidden=target!==helpCommentPreview;
-  if(!helpCommentPreview.hidden){
-    const editor=ta.getBoundingClientRect();
-    helpCommentPreview.style.left=(Math.min(editor.right,innerWidth)-48)+'px';
-    helpCommentPreview.style.top=(editor.top+16)+'px';
-  }
+  const target=guidingComment()&&commentAdd.hidden
+    ?ta:document.querySelector(helpSteps[helpStep].dataset.target);
   const bounds=target.getBoundingClientRect();
   const edge=12, gap=16, padding=5;
   const left=Math.max(0,bounds.left-padding);
@@ -1039,9 +998,11 @@ helpNext.addEventListener('click',()=>{
 });
 document.getElementById('draft-help-skip').addEventListener('click',()=>closeDraftHelp(true));
 document.addEventListener('pointerdown',event=>{
+  if(guidingComment()&&ta.contains(event.target))return;
   if(!draftHelp.contains(event.target))closeDraftHelp();
 });
-ta.addEventListener('focus',()=>closeDraftHelp());
+ta.addEventListener('focus',()=>{if(!guidingComment())closeDraftHelp()});
+document.getElementById('comment-add').addEventListener('click',()=>closeDraftHelp());
 const helpLayout=new ResizeObserver(positionDraftHelp);
 helpLayout.observe(draftHelp);
 helpLayout.observe(ta);
@@ -1070,7 +1031,15 @@ addEventListener('keydown',e=>{
   cn.classList.toggle('linked',syncOn);
   if(!chap(cur))cur=CH[0].no;
   load(cur); sizeCheck();
-  try{draftHelp.hidden=window.localStorage.getItem(helpKey)==='1'}catch{draftHelp.hidden=false}
+  try{
+    const pendingKey='translation-reader:draft-help-book';
+    const pendingBook=window.localStorage.getItem(pendingKey);
+    if(window.readerStart&&pendingBook===location.pathname.split('/')[2]&&window.localStorage.getItem(helpKey)!=='1'){
+      window.localStorage.setItem(helpKey,'1');
+      window.localStorage.removeItem(pendingKey);
+      draftHelp.hidden=false;
+    }
+  }catch{}
   showDraftHelpStep();
 })();
 """
@@ -1102,10 +1071,10 @@ PAGE = """<!DOCTYPE html>
   <button onclick="fs(1)">A+</button>
   {theme_control}
   <button type="button" id="open-draft-help" aria-controls="draft-help">Walkthrough</button>
+  <label>Word comment author <input id="comment-author" maxlength="100" placeholder="Translator"></label>
   </div></details>
   <details class="reader-menu exports-menu" id="exports-menu"><summary id="exports-trigger">Exports</summary><div>
   <button onclick="exportWord()" title="export all drafted chapters with comments">Word</button>
-  <label>Word comment author <input id="comment-author" maxlength="100" placeholder="Translator"></label>
   <button onclick="copyDocs()" title="copy with Chapter heading (Cmd+Enter)">Copy for Google Docs</button>
   <button onclick="backup()" title="download every drafted chapter as one timestamped .txt">Draft text backup</button>
   <button onclick="fullProjectBackup()"
@@ -1141,7 +1110,6 @@ PAGE = """<!DOCTYPE html>
 </div>
 <aside id="draft-help" aria-label="Draft walkthrough" hidden>
   <div id="draft-help-spotlight" aria-hidden="true"></div>
-  <span id="draft-help-comment-preview" aria-hidden="true" hidden><span class="comment-add-icon">+</span></span>
   <div id="draft-help-card">
     <div aria-live="polite">
       <section data-target="#sel">
@@ -1160,9 +1128,9 @@ PAGE = """<!DOCTYPE html>
         <h2>Link Chinese and English</h2>
         <p>With sync on, click a Chinese paragraph to see its English. To link several Chinese paragraphs to one English line, put the cursor in that line, Option/Alt-click the first Chinese paragraph, then Shift-click the last.</p>
       </section>
-      <section data-target="#draft-help-comment-preview" hidden>
+      <section data-target="#comment-add" hidden>
         <h2>Leave a comment</h2>
-        <p>Select English text to reveal this speech bubble beside it. Click it to add a note. Click the blue-highlighted text to reopen the note.</p>
+        <p>Select English text to reveal the Add comment bubble beside it. If the draft is empty, type a few words first. Click the bubble to add a note.</p>
       </section>
       <section data-target="#exports-trigger" hidden>
         <h2>Export to Word</h2>
@@ -1196,13 +1164,10 @@ PAGE = """<!DOCTYPE html>
   <div class="body">
     <div class="cards" id="cards"></div>
     <div id="bar"></div>
-    <h4>Ten most repeated words</h4>
-    <div id="fw"></div>
-    <p class="note">Time counts only typing in this app &mdash; reading, work in
-      Docs and rounds with your editor are not captured, so treat it as a floor.
-      Words come from every chapter drafted here, with chapter headings excluded.
-      Common words are filtered out, as are names (anything capitalised away from
-      the start of a sentence most of the time).</p>
+    <form id="chapter-time-form" onsubmit="saveChapterTime(event)">
+      <label>Current chapter time (minutes) <input id="chapter-minutes" type="number" min="0" step="1" required></label>
+      <button type="submit" class="act">Save time</button>
+    </form>
   </div>
 </div>
 <script src="corpus.js"></script>

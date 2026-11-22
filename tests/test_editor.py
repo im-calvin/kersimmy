@@ -137,19 +137,30 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     book_id = response.json()[0]['id']
     page.goto(base + '/books/' + book_id + '/draft')
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
-    select(page, 4, 8)
+    expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
     page.context.set_offline(True)
     try:
+        page.reload()
+        expect(page.locator('#reader-server-status')).to_contain_text('Offline')
+        expect(page.locator('#ta')).to_have_js_property('value', 'The moon shines.')
+        expect(page.locator('#cn')).to_contain_text('第一段月光')
+        select(page, 4, 8)
         page.locator('#ta').press('ControlOrMeta+i')
         expect(page.locator('#reader-server-status')).to_contain_text('Connection lost')
         expect(page.get_by_role('button', name='Download recovery backup')).to_be_visible()
         recovery = page.evaluate("id=>JSON.parse(localStorage.getItem('original-reader-pending:'+id))", book_id)
         assert recovery['state']['italics']['1'] == [{'start': 4, 'end': 8}]
+        page.reload()
+        expect(page.locator('#ta em')).to_have_text('moon')
     finally:
         page.context.set_offline(False)
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server', timeout=15000)
-    page.reload()
-    expect(page.locator('#ta em')).to_have_text('moon')
+    page.context.set_offline(True)
+    try:
+        page.reload()
+        expect(page.locator('#ta em')).to_have_text('moon')
+    finally:
+        page.context.set_offline(False)
     # Importing a plain-text replacement must clear its old formatting.
     menu = open_exports(page)
     with page.expect_file_chooser() as chooser:
@@ -161,6 +172,48 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     page.reload()
     expect(page.locator('#ta')).to_have_js_property('value', 'Plain replacement.')
     assert page.locator('#ta em,#ta i').count() == 0
+
+
+def test_offline_conflict_never_rebases_pending_changes_on_reload(page, reader_environment):
+    base = reader_environment['base']
+    response = page.request.post(base + '/api/import', data={'books': [{
+        'book': {'title': 'Offline conflict', 'chapters': reader_environment['chapters']},
+        'state': {'drafts': {'1': 'Shared original.'}},
+    }]})
+    assert response.status == 201
+    book_id = response.json()[0]['id']
+    state_url = f'{base}/api/books/{book_id}/state'
+    page.goto(f'{base}/books/{book_id}/draft')
+    expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
+    page.context.set_offline(True)
+    page.locator('#ta').fill('My offline draft.')
+    page.reload()
+    expect(page.locator('#ta')).to_have_js_property('value', 'My offline draft.')
+    state = page.request.get(state_url).json()
+    state['drafts']['1'] = 'Other device draft.'
+    response = page.request.put(state_url, data={'state': state, 'expectedRevision': state['revision']})
+    assert response.ok
+    page.context.set_offline(False)
+    use_server = page.get_by_role('button', name='Use server version', exact=True)
+    expect(use_server).to_be_visible()
+    # The previous release could write a newer outer revision while leaving
+    # the pending draft tied to its original revision inside the saved state.
+    page.evaluate('''([id,revision])=>{
+      const key='original-reader-pending:'+id;
+      const pending=JSON.parse(localStorage.getItem(key));
+      pending.revision=revision;
+      localStorage.setItem(key,JSON.stringify(pending));
+    }''', [book_id, response.json()['revision']])
+    for _ in range(2):
+        page.reload()
+        expect(use_server).to_be_visible()
+        expect(page.locator('#ta')).to_have_js_property('value', 'My offline draft.')
+        assert page.request.get(state_url).json()['drafts']['1'] == 'Other device draft.'
+    assert project(page)['state']['drafts']['1'] == 'My offline draft.'
+    page.once('dialog', lambda dialog: dialog.accept())
+    use_server.click()
+    expect(page.locator('#ta')).to_have_js_property('value', 'Other device draft.')
+    expect(use_server).to_be_hidden()
 
 
 def test_copy_for_docs_preserves_italics_and_selection(reader):

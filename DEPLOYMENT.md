@@ -30,12 +30,14 @@ empty library, ready for a manuscript or a full-project backup.
 - Drafts autosave to SQLite after approximately 400 ms of inactivity.
 - Open editors check the server every 5 seconds while clean; the library refreshes
   every 10 seconds. Unsaved edits are never silently replaced by remote changes.
-- Concurrent stale writes are rejected. Download the conflicting local work with
-  Backup before reloading to choose which version to keep.
-- Interrupted saves retain a recovery snapshot in browser localStorage and retry
-  automatically. Keep the page open until Synced to server. Local recovery also
-  survives a reload at the same address. The app must be loaded while online;
-  this is not a fully offline application.
+- Concurrent stale writes are rejected. The local draft stays open, even after
+  a reload. Download a recovery backup to keep it, then choose **Use server
+  version** to discard the pending edits and reopen the saved server copy.
+- Open a draft online and wait for **Available offline**. That draft can then
+  reload and be edited offline in the same browser at the same address.
+  Interrupted saves retain a recovery snapshot in browser storage and retry
+  automatically on reconnect. The library, imports, and previously unopened
+  drafts need the server. On a remote host, offline support requires HTTPS.
 - SQLite snapshots run at startup, every 15 minutes, and on orderly Python shutdown.
   BACKUP_INTERVAL_SECONDS and BACKUP_KEEP configure cadence and retention.
   Defaults retain the newest 96 snapshots (roughly one day, less with manual or
@@ -131,6 +133,28 @@ Docker volume at `/data`.
    [Cloudflare tunnel routing](https://developers.cloudflare.com/tunnel/concepts/routing/)
 
 ### Updates and rollback
+
+Test the candidate release with a disposable copy of the previous release's
+SQLite database and a version-1 JSON backup before rolling it out. Use the
+existing production volume and hostname. Pin a tested `sha-<full commit SHA>`
+image for the rollout and keep the previous tag for rollback.
+
+Run the compatibility check with the Git commit currently deployed in production:
+
+```sh
+.venv/bin/python tests/release_compatibility.py --previous-ref <deployed-commit>
+```
+
+The script creates a synthetic library with the previous release, upgrades it
+using the working tree, verifies forward refresh, then rolls back. It uses a
+temporary directory, localhost port, and isolated Chromium profile.
+
+The site displays its product version. Change `APP_VERSION` in
+`tools/reader_server.py` when releasing a new product version.
+Check `/api/status` for both the product version and the running release SHA. Once this update is installed,
+clean open tabs reload on later release changes. Tabs with pending edits or open
+dialogs wait until they can reload safely. Tabs opened before release detection
+was introduced need one refresh to pick it up.
 
 Choose an update path:
 

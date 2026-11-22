@@ -17,8 +17,9 @@ root output merely to inspect the project.
 
 See [ROADMAP.md](ROADMAP.md) for the high-level goal, completed product baseline,
 remaining work, and shared-glossary stretch goal. Use the local editor as the
-reference for hosted behavior. The draft walkthrough appears on the first visit
-and can be reopened under **View → Walkthrough**. Theme follows the system until
+reference for hosted behavior. The draft walkthrough appears when opening the
+first draft added through **Add manuscript** in that browser. Replay it under
+**View → Walkthrough**. Theme follows the system until
 the user switches it with the sun or moon under **View** in the draft. Dark mode
 uses beige reading text.
 
@@ -64,7 +65,7 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
   chapter options. `chapter.volume` and optional displayed `chapter.number` are
   additive metadata; numeric `chapter.no` remains the unique persistence key.
 - `tools/build_draft.py`: original draft HTML/CSS/JavaScript, walkthrough,
-  paragraph sync, search, statistics, repeated words, timing, and text/project export.
+  paragraph sync, search, statistics, timing, and text/project export.
   `render_page(cfg, chapters, illustration)` is used by the CLI and server.
 - `tools/draft_editor.py`: minimal native editable surface and italic range rendering,
   embedded by the draft generator. Plain draft strings and UTF-16 selection offsets
@@ -181,6 +182,12 @@ Docker uses that option. Do not publish manuscript bundles unintentionally.
 
 ## Data compatibility
 
+Backward compatibility is a release requirement. Before production rollout,
+verify a disposable database and portable backup from the previous release,
+including pending browser edits. Preserve existing origins, volume names,
+chapter IDs, storage keys, and version-1 backups. Use a staged migration and a
+rollback plan for any incompatible change.
+
 The server preserves the existing `reader.sqlite3` schema (`books` with JSON book,
 JSON state, revision) and version-1 JSON backups. Every book imported through
 JSON restore or migration gets an independent UUID; offline SQLite snapshot
@@ -209,11 +216,20 @@ JSON restore and browser-library migration remain available in the library.
 Revision-checked SQLite writes reject conflicting edits. Pending work gets local
 recovery before a server write; preserve this recovery if saving fails. Clean
 pages poll and refresh on remote changes; unsaved/review-editor content blocks
-refresh. No offline app shell is provided. Hosted smart punctuation is disabled;
+refresh. The hosted draft can reload offline after it shows **Available offline**.
+`web/reader-worker.js` caches its page and assets, and `web/reader-offline.js`
+stores the book and confirmed draft state in IndexedDB. Keep the original
+revision with pending edits across reloads so the server can reject conflicts.
+Hosted smart punctuation is disabled;
 SOURCE and YOUR TRANSLATION labels remain absent. Preserve requested backdrop
 closing and per-book GIF customization when updating generated page integration.
 
 ## Backups and deployment
+
+Release identity is separate from persisted data versions. GHCR images report
+the commit SHA and local builds report a source fingerprint. Clean hosted tabs
+reload after detecting a different release. Protect pending edits, open dialogs,
+and active imports from automatic reloads.
 
 SQLite uses WAL/FULL commits on local disk. Automatic snapshots use SQLite's
 online backup API, integrity checks, temporary files/atomic rename, and bounded

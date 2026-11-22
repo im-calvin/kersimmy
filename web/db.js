@@ -38,4 +38,5 @@ export async function previewManuscript(file, options) {
 }
 
 export const getBundle = id => api('books/' + encodeURIComponent(id) + '/bundle');
-export const setVolumes = (id, volumes, expectedRevision) => api('books/' + encodeURIComponent(id) + '/volumes', 'PUT', {volumes, expectedRevision});
+export const setVolumes = (id, volumes, expectedRevision, titles) => api('books/' + encodeURIComponent(id) + '/volumes', 'PUT', {volumes, titles, expectedRevision});
+export const updateImport = (id, preview, expectedRevision) => api('books/' + encodeURIComponent(id) + '/chapter-import', 'PUT', {preview, expectedRevision});

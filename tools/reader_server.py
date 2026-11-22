@@ -1,6 +1,7 @@
 """Serve the original Python-generated reader with a library and SQLite storage."""
 import argparse
 import base64
+import hashlib
 import html
 import json
 import os
@@ -11,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from functools import partial
+from functools import cache, partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
@@ -22,6 +23,21 @@ from chapter_structure import VOLUME_HEADING_REGEX
 from tlconfig import DEFAULTS, parse_source, read_source
 
 ROOT = Path(__file__).resolve().parent.parent
+APP_VERSION = '0.1'
+
+
+@cache
+def reader_release():
+    release = os.environ.get('READER_RELEASE', '')
+    if re.fullmatch(r'[0-9a-f]{40}', release):
+        return release
+    digest = hashlib.sha256()
+    for directory, suffixes in (('tools', {'.py'}), ('web', {'.js', '.css', '.html'})):
+        for path in sorted((ROOT / directory).iterdir()):
+            if path.suffix in suffixes and path.is_file():
+                digest.update(path.name.encode())
+                digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def parse_upload(data):
@@ -82,12 +98,15 @@ def parse_upload(data):
             lines=text.splitlines()
             paragraph_mode='blank' if sum(not line.strip() for line in lines)/max(1,len(lines)) >= .15 else 'line'
         warnings=[]
+        untitled = sum(not chapter['title'].strip() for chapter in chapters)
+        if untitled:
+            warnings.append(f'{untitled} chapter heading{"s have" if untitled != 1 else " has"} no title.')
         if any('number' in c for c in chapters):
             warnings.append('Chapter numbering restarts between volumes. Text backups use continuous chapter numbers to keep drafts distinct.')
         if any(b != a+1 for a,b in zip(numbers,numbers[1:])):
             warnings.append('Chapter numbering has gaps or is out of order.')
         warnings.append('The original parser excludes text before the first chapter heading.')
-        return {'chapters':chapters,'encoding':encoding,'paragraphMode':paragraph_mode,'headingRegex':cfg['heading_regex'],'volumeHeadingRegex':cfg['volume_heading_regex'],'warnings':warnings,'sourceName':name}
+        return {'chapters':chapters,'encoding':encoding,'paragraphMode':paragraph_mode,'headingMode':mode,'volumeMode':volume_mode,'headingRegex':cfg['heading_regex'],'volumeHeadingRegex':cfg['volume_heading_regex'],'warnings':warnings,'sourceName':name}
 
 
 def generated_page(book, mode):
@@ -142,7 +161,10 @@ def generated_page(book, mode):
     end = page.index('</script>',start)
     script = page[start+8:end]
     code = json.dumps(script, ensure_ascii=False).replace('<', '\\u003c')
-    page = page[:start] + '<script src="/reader-storage.js"></script><script>window.readerStart(' + json.dumps({'id':book['id'],'mode':mode,'prefix':cfg['storage_prefix']}) + ',()=>{const script=document.createElement("script");script.textContent=' + code + ';document.body.append(script)});</script>' + page[end+9:]
+    offline = '<script src="/reader-offline.js"></script>' if mode == 'draft' else ''
+    config = {'id':book['id'],'mode':mode,'prefix':cfg['storage_prefix'],
+              'version':APP_VERSION,'release':reader_release()}
+    page = page[:start] + offline + '<script src="/reader-storage.js"></script><script>window.readerStart(' + json.dumps(config) + ',()=>{const script=document.createElement("script");script.textContent=' + code + ';document.body.append(script)});</script>' + page[end+9:]
     extra = '''<style>[hidden]{display:none!important}header{height:auto;min-height:44px;flex-wrap:wrap;padding:8px 12px}header a{font:13px sans-serif;color:var(--heading);text-decoration:none;margin-right:12px}#wrap{flex:1;min-height:0;height:auto}body{display:flex;flex-direction:column}#find,#stats{position:fixed;inset:0;background:var(--scrim);padding:5vh 5vw;z-index:40}#find.on{display:flex}#find>.top,#find>#verdict,#find>#hits,#stats>.top,#stats>.body{background:var(--bg);padding:12px 22px}#stats{width:100%;max-height:none;border:0;border-radius:0;box-shadow:none}#stats>.top,#stats>.body{width:min(760px,100%);margin:0 auto}#stats>.top{border-radius:12px 12px 0 0}#stats>.body{border-radius:0 0 12px 12px;padding-bottom:30px}#artwork{display:flex;flex-wrap:wrap;align-items:center;gap:24px;margin:0 0 22px}#project-gif{width:150px;height:150px;object-fit:contain}#reader-server-status{font:12px sans-serif;padding:6px 12px;background:var(--status-bg);color:var(--status)}#reader-server-status.error{color:var(--error);background:var(--error-bg)}</style>'''
     return page.replace('</head>',extra+'</head>')
 
@@ -154,6 +176,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header('Cache-Control','no-store')
+        self.send_header('X-Kersimmy-Release',reader_release())
         self.send_header('X-Content-Type-Options','nosniff')
         super().end_headers()
 
@@ -187,7 +210,7 @@ class Handler(SimpleHTTPRequestHandler):
             if not path.startswith('/api/'): return super().do_GET()
             if path=='/api/status':
                 backups=sorted(self.store.backups.glob('reader-*.sqlite3'))
-                return self.reply({'storage':'sqlite','reader':'original-python','backupIntervalSeconds':self.store.interval,'backupCount':len(backups),'lastBackup':backups[-1].name if backups else None,'backupError':self.store.last_error})
+                return self.reply({'storage':'sqlite','reader':'original-python','version':APP_VERSION,'release':reader_release(),'backupIntervalSeconds':self.store.interval,'backupCount':len(backups),'lastBackup':backups[-1].name if backups else None,'backupError':self.store.last_error})
             if path=='/api/books': return self.reply([e['book'] for e in self.store.entries()])
             if path=='/api/export': return self.reply({'format':'translation-reader','version':1,'books':self.store.entries()})
             if len(parts) in (4,5) and parts[2]=='books':
@@ -226,25 +249,53 @@ class Handler(SimpleHTTPRequestHandler):
                 if not row:return self.reply({'error':'Book not found'},404)
                 book,state,revision=json.loads(row[0]),json.loads(row[1]),row[2]
                 if parts[4]=='state':
-                    if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:return self.reply({'error':'This book changed on another device. Download a recovery backup before reloading.','conflict':True},409)
+                    if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:return self.reply({'error':'This book changed on another device. Your local changes are still here.','conflict':True},409)
                     state=data['state'];validate(book,state)
                     state=dict(state,id=parts[3],revision=revision+1)
                     db.execute('UPDATE books SET state=?,revision=? WHERE id=?',(json.dumps(state),revision+1,parts[3]));result={'revision':revision+1}
-                elif parts[4]=='volumes':
+                elif parts[4] in ('volumes','chapter-import'):
                     if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:
-                        return self.reply({'error':'This book changed. Reopen Organize volumes to load the latest version.','conflict':True},409)
-                    volumes = data.get('volumes')
-                    if not isinstance(volumes, dict) or set(volumes) != {str(c['no']) for c in book['chapters']}:
-                        raise ValueError('Volume assignments must include each chapter exactly once.')
-                    chapters = []
-                    for chapter in book['chapters']:
-                        title = volumes[str(chapter['no'])]
-                        if not isinstance(title, str) or len(title.strip()) > 200:
-                            raise ValueError('Volume names must be 200 characters or fewer.')
-                        chapter = {k:v for k,v in chapter.items() if k!='volume'}
-                        if title.strip(): chapter['volume'] = title.strip()
-                        chapters.append(chapter)
-                    book = dict(book, chapters=chapters)
+                        return self.reply({'error':'This book changed. Reopen Edit chapters to load the latest version.','conflict':True},409)
+                    if parts[4]=='chapter-import':
+                        preview = data['preview']
+                        chapters = preview['chapters']
+                        if not isinstance(chapters,list) or (
+                            [(c['no'], c['paras']) for c in chapters] !=
+                            [(c['no'], c['paras']) for c in book['chapters']]
+                        ):
+                            raise ValueError('Chapter boundaries or source text changed. Add this file as a new manuscript to keep existing work safe.')
+                        chapter_fields = {'title','number','volume'}
+                        chapters = [
+                            {**{key:value for key,value in old.items() if key not in chapter_fields},
+                             **{key:new[key] for key in chapter_fields if key in new}}
+                            for old,new in zip(book['chapters'], chapters)
+                        ]
+                        fields = ('encoding','paragraphMode','headingMode','volumeMode',
+                                  'headingRegex','volumeHeadingRegex','warnings','sourceName')
+                        book = dict(book, chapters=chapters, **{key:preview[key] for key in fields if key in preview})
+                    else:
+                        volumes = data.get('volumes')
+                        titles = data.get('titles', {})
+                        numbers = {str(c['no']) for c in book['chapters']}
+                        if not isinstance(volumes,dict) or set(volumes)!=numbers:
+                            raise ValueError('Volume assignments must include each chapter exactly once.')
+                        if not isinstance(titles,dict) or set(titles)-numbers:
+                            raise ValueError('Chapter titles must refer to existing chapters.')
+                        chapters = []
+                        for chapter in book['chapters']:
+                            no = str(chapter['no'])
+                            volume = volumes[no]
+                            if not isinstance(volume,str) or len(volume.strip())>200:
+                                raise ValueError('Volume names must be 200 characters or fewer.')
+                            chapter = {k:v for k,v in chapter.items() if k!='volume'}
+                            if volume.strip(): chapter['volume'] = volume.strip()
+                            if no in titles:
+                                title = titles[no]
+                                if not isinstance(title,str) or len(title.strip())>200:
+                                    raise ValueError('Chapter titles must be 200 characters or fewer.')
+                                chapter['title'] = title.strip()
+                            chapters.append(chapter)
+                        book = dict(book, chapters=chapters)
                     state = dict(state, revision=revision+1)
                     validate(book,state)
                     db.execute('UPDATE books SET book=?,state=?,revision=? WHERE id=?',

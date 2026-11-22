@@ -1,10 +1,10 @@
 import {dismissOnBackdrop} from './dialogs.js';
-import {previewManuscript, getBundle, setVolumes} from './db.js';
+import {previewManuscript, getBundle, setVolumes, updateImport} from './db.js';
 const stripHeading = text => text.replace(/^\s*(?:Chapter|Ch\.?)\s+\d+[^\n]*\n/i, '').trim();
 import {listBooks, serverMode, migrateBrowserLibrary, backupServer, serverStatus, getBook, getState, importBooks, backupPayload, readBackup, download, filename, stamp} from './db.js';
 const $ = id => document.getElementById(id);
 document.querySelectorAll('dialog').forEach(dismissOnBackdrop);
-let preview = null, currentBook = null, parsingVersion = 0;
+let preview = null, currentBook = null, parsingVersion = 0, importTarget = null;
 const message = (text, error = false) => { $('message').textContent = text; $('message').className = error ? 'error' : ''; };
 function element(tag, text, className) {
   const el = document.createElement(tag); el.textContent = text;
@@ -36,7 +36,7 @@ async function renderLibrary() {
     link.href = `/books/${encodeURIComponent(book.id)}/draft`;
     const backup = element('button', 'Backup', 'subtle');
     backup.onclick = () => exportBooks([book]).catch(e => message(e.message, true));
-    const organize=element('button','Organize volumes','subtle');
+    const organize=element('button','Edit chapters','subtle');
     organize.onclick=async()=>{organize.disabled=true;try{await openVolumes(book.id)}catch(e){message(e.message,true)}finally{organize.disabled=false}};
     actions.append(link, organize, backup); card.append(actions); $('books').append(card);
   }
@@ -44,12 +44,33 @@ async function renderLibrary() {
 function invalidate() {
   parsingVersion++; preview = null; $('confirm-import').disabled = true; $('preview').hidden = true; $('import-error').textContent = '';
 }
-$('add-book').onclick = () => $('import-dialog').showModal();
+function openImport(target = null) {
+  importTarget = target;
+  $('import-form').reset();
+  invalidate();
+  const book = target?.book;
+  $('import-title').textContent = book ? 'Recheck manuscript import' : 'Add a manuscript';
+  $('confirm-import').textContent = book ? 'Update existing book' : 'Add to library';
+  $('book-title').readOnly = !!book;
+  if (book) {
+    $('book-title').value = book.title;
+    for (const [id, value] of [
+      ['encoding', book.encoding], ['paragraph-mode', book.paragraphMode],
+      ['heading-mode', book.headingMode], ['volume-mode', book.volumeMode],
+    ]) {
+      if ([...$(id).options].some(option => option.value === value)) $(id).value = value;
+    }
+    $('heading-regex').value = book.headingRegex || '';
+  }
+  $('custom-heading').hidden = $('heading-mode').value !== 'custom';
+  $('import-dialog').showModal();
+}
+$('add-book').onclick = () => openImport();
 $('close-import').onclick = () => $('import-dialog').close();
 $('manuscript').onchange = () => {
   invalidate();
   const file = $('manuscript').files[0];
-  if (file) $('book-title').value = file.name.replace(/\.(txt|docx)$/i, '');
+  if (file && !importTarget) $('book-title').value = file.name.replace(/\.(txt|docx)$/i, '');
 };
 for (const id of ['encoding','paragraph-mode','heading-mode','volume-mode']) $(id).onchange = invalidate;
 $('heading-mode').onchange = () => { $('custom-heading').hidden = $('heading-mode').value !== 'custom'; invalidate(); };
@@ -64,30 +85,80 @@ $('parse').onclick = async () => {
     $('parse').disabled = true;
     const parsed = await previewManuscript(file, {encoding:$('encoding').value, paragraphMode:$('paragraph-mode').value,
       headingMode:$('heading-mode').value, volumeMode:$('volume-mode').value, headingRegex:$('heading-regex').value});
-    const decoded = {encoding:parsed.encoding};
     if (version !== parsingVersion) return;
-    preview = {...parsed, encoding:decoded.encoding, sourceName:file.name};
-    $('preview-chapter').replaceChildren(...preview.chapters.map(c => new Option(`${c.volume ? c.volume + ' · ' : ''}${c.no === 0 ? 'Preface' : 'Chapter ' + (c.number ?? c.no)} · ${c.title}`, c.no)));
-    $('preview-summary').textContent = `${preview.chapters.length} chapters · ${preview.chapters.reduce((n,c) => n+c.paras.length, 0).toLocaleString()} paragraphs · ${decoded.encoding} · ${parsed.paragraphMode}`;
+    preview = parsed;
+    const existing = importTarget?.book.chapters;
+    const compatible = !existing || (existing.length === parsed.chapters.length && existing.every((old,index) => {
+      const chapter = parsed.chapters[index];
+      return old.no === chapter.no && old.paras.length === chapter.paras.length
+        && old.paras.every((text,p) => text === chapter.paras[p]);
+    }));
+    if (existing && compatible) parsed.chapters.forEach((chapter,index) => {chapter.title ||= existing[index].title;});
+    renderPreviewChapters(parsed.chapters);
+    $('preview-chapter').selectedIndex = 0;
+    $('preview-summary').textContent = `${parsed.chapters.length} chapters · ${parsed.chapters.reduce((n,c) => n+c.paras.length, 0).toLocaleString()} paragraphs · ${parsed.encoding} · ${parsed.paragraphMode}`;
     $('preview-warnings').textContent = parsed.warnings.join(' ');
-    showPreview(); $('preview').hidden = false; $('confirm-import').disabled = false;
+    showPreview(); $('preview').hidden = false; $('confirm-import').disabled = !compatible;
+    if (!compatible) $('import-error').textContent = 'Chapter boundaries or source text changed. Add this file as a new manuscript to keep existing work safe.';
   } catch (e) { $('import-error').textContent = e.message; }
   finally { $('parse').disabled = false; }
 };
+function chapterLabel(chapter) {
+  const number = chapter.no === 0 ? 'Preface' : 'Chapter ' + (chapter.number ?? chapter.no);
+  return [number, chapter.title].filter(Boolean).join(' · ');
+}
+function renderPreviewChapters(chapters) {
+  const fragment = document.createDocumentFragment();
+  let volume, group = fragment;
+  for (const chapter of chapters) {
+    if (chapter.volume !== volume) {
+      volume = chapter.volume;
+      group = fragment;
+      if (volume) {
+        group = document.createElement('optgroup');
+        group.label = volume;
+        fragment.append(group);
+      }
+    }
+    group.append(new Option(chapterLabel(chapter), chapter.no));
+  }
+  $('preview-chapter').replaceChildren(fragment);
+}
+function selectedPreviewChapter() {
+  return preview.chapters[$('preview-chapter').selectedIndex];
+}
 function showPreview() {
-  const chapter = preview.chapters.find(c => c.no === Number($('preview-chapter').value));
+  const chapter = selectedPreviewChapter();
+  $('preview-chapter-title').value = chapter.title;
   $('preview-text').replaceChildren(...chapter.paras.slice(0, 8).map(p => element('p', p)));
   if (chapter.paras.length > 8) $('preview-text').append(element('small', `… ${chapter.paras.length - 8} more paragraphs`));
 }
 $('preview-chapter').onchange = showPreview;
+$('preview-chapter-title').oninput = event => {
+  const chapter = selectedPreviewChapter();
+  chapter.title = event.target.value.trim();
+  $('preview-chapter').selectedOptions[0].textContent = chapterLabel(chapter);
+};
 $('import-form').onsubmit = async e => {
   e.preventDefault();
-  if (!preview) return;
+  if (!preview || $('confirm-import').disabled) return;
   $('confirm-import').disabled = true;
   try {
-    const [book] = await importBooks([{book:{...preview, title:$('book-title').value.trim()}}]);
-    $('import-dialog').close(); $('import-form').reset(); $('custom-heading').hidden = true; invalidate();
-    await renderLibrary(); message(`“${book.title}” is ready. Open it to start translating.`);
+    if (importTarget) {
+      await updateImport(importTarget.book.id, preview, importTarget.state.revision);
+      message('Manuscript import updated.');
+    } else {
+      const [book] = await importBooks([{book:{...preview, title:$('book-title').value.trim()}}]);
+      try {
+        if (window.localStorage.getItem('translation-reader:draft-help-v1') !== '1'
+          && !window.localStorage.getItem('translation-reader:draft-help-book')) {
+          window.localStorage.setItem('translation-reader:draft-help-book', book.id);
+        }
+      } catch { /* The walkthrough can still be opened manually. */ }
+      message(`“${book.title}” is ready. Open it to start translating.`);
+    }
+    $('import-dialog').close();
+    await renderLibrary();
   } catch (error) { $('import-error').textContent = error.message; $('confirm-import').disabled = false; }
 };
 $('backup-library').onclick = async () => { try { await exportBooks(await listBooks()); } catch (e) { message(e.message, true); } };
@@ -109,9 +180,9 @@ $('import-current').onclick = async () => {
   } catch (e) { message(e.message, true); }
   finally { $('import-current').disabled = false; }
 };
-let organization=null, assignedVolumes={}, selectedChapters=new Set();
+let organization=null, assignedVolumes={}, editedTitles={}, selectedChapters=new Set();
 async function openVolumes(id) {
-  organization=await getBundle(id);assignedVolumes={};selectedChapters=new Set();
+  organization=await getBundle(id);assignedVolumes={};editedTitles={};selectedChapters=new Set();
   for(const chapter of organization.book.chapters)assignedVolumes[chapter.no]=chapter.volume||'';
   $('volumes-book').textContent=organization.book.title;
   $('volume-name').value='';$('volumes-error').textContent='';
@@ -120,11 +191,16 @@ async function openVolumes(id) {
 function renderVolumes() {
   const fragment=document.createDocumentFragment();
   for(const chapter of organization.book.chapters){
-    const row=element('label','','volume-row'), checkbox=document.createElement('input');
+    const row=element('div','','volume-row'), checkbox=document.createElement('input');
     checkbox.type='checkbox';checkbox.dataset.chapter=chapter.no;checkbox.checked=selectedChapters.has(chapter.no);
     checkbox.setAttribute('aria-label',`Select ${chapter.volume ? chapter.volume + ' ' : ''}Chapter ${chapter.number ?? chapter.no}`);
     checkbox.onchange=()=>{if(checkbox.checked)selectedChapters.add(chapter.no);else selectedChapters.delete(chapter.no);updateSelectAll()};
-    row.append(checkbox,element('span',`Chapter ${chapter.number ?? chapter.no} · ${chapter.title}`),element('small',assignedVolumes[chapter.no]||'No volume'));
+    const label=element('label',`Chapter ${chapter.number ?? chapter.no}`);
+    const title=document.createElement('input');
+    title.maxLength=200;title.placeholder='Optional title';title.value=editedTitles[chapter.no]??chapter.title;
+    title.oninput=()=>{editedTitles[chapter.no]=title.value.trim();};
+    label.append(title);
+    row.append(checkbox,label,element('small',assignedVolumes[chapter.no]||'No volume'));
     fragment.append(row);
   }
   $('volume-chapters').replaceChildren(fragment);
@@ -147,12 +223,13 @@ $('assign-volume').onclick=()=>{
 $('volumes-form').onsubmit=async e=>{
   e.preventDefault();$('save-volumes').disabled=true;
   try{
-    await setVolumes(organization.book.id,assignedVolumes,organization.state.revision);
-    $('volumes-dialog').close();await renderLibrary();message('Volume organization saved.');
+    await setVolumes(organization.book.id,assignedVolumes,organization.state.revision,editedTitles);
+    $('volumes-dialog').close();await renderLibrary();message('Chapter changes saved.');
   }catch(error){$('volumes-error').textContent=error.message}
   finally{$('save-volumes').disabled=false}
 };
 for(const id of ['close-volumes','cancel-volumes'])$(id).onclick=()=>$('volumes-dialog').close();
+$('recheck-import').onclick=()=>{$('volumes-dialog').close();openImport(organization);};
 renderLibrary().catch(e => message(`Could not open browser storage: ${e.message}`, true));
 fetch('current-book.json').then(async response => {
   if (!response.ok) return;
@@ -164,7 +241,12 @@ fetch('current-book.json').then(async response => {
 if (serverMode) {
   document.querySelector('.file-box small').textContent = 'Plain text or Word .docx · up to 30 MB · saved on your server';
   document.querySelector('.device-label').textContent = 'Shared server library · automatic sync';
-  document.querySelector('.library footer').replaceChildren(element('p','Books and drafts are saved on your server. Open the same server address on another device to continue.'));
+  const versionLabel = element('p', '');
+  document.querySelector('.library footer').replaceChildren(
+    element('p','Books and drafts are saved on your server. Open the same server address on another device to continue.'),
+    versionLabel,
+  );
+  versionLabel.hidden = true;
   const actions = document.querySelector('.library-actions');
   const migrate = element('button','Import browser library');
   migrate.onclick = async () => {
@@ -175,6 +257,25 @@ if (serverMode) {
   const backup = element('button','Back up server now');
   backup.onclick = async () => { try { const result = await backupServer(); message('SQLite snapshot created: ' + result.backup); } catch(e) { message(e.message,true); } };
   actions.append(migrate,backup);
-  serverStatus().then(status => message(status.backupError ? 'Automatic backup error: ' + status.backupError : `Server storage active · automatic SQLite backup every ${Math.round(status.backupIntervalSeconds / 60)} minutes · ${status.backupCount} snapshots.`,!!status.backupError)).catch(()=>{});
-  setInterval(() => { if (!document.hidden && !document.querySelector('dialog[open]')) renderLibrary().catch(()=>{}); },10000);
+  let libraryRelease;
+  serverStatus().then(status => {
+    libraryRelease = status.release;
+    if (status.version) {
+      versionLabel.textContent = 'v' + status.version;
+      versionLabel.hidden = false;
+    }
+    message(status.backupError ? 'Automatic backup error: ' + status.backupError : `Server storage active · automatic SQLite backup every ${Math.round(status.backupIntervalSeconds / 60)} minutes · ${status.backupCount} snapshots.`,!!status.backupError);
+  }).catch(()=>{});
+  setInterval(async () => {
+    if (document.hidden || document.querySelector('dialog[open]')) return;
+    try {
+      const status = await serverStatus();
+      if (document.hidden || document.querySelector('dialog[open]')) return;
+      if (libraryRelease && status.release !== libraryRelease) location.reload();
+      else {
+        libraryRelease = status.release;
+        await renderLibrary();
+      }
+    } catch { /* Try again on the next refresh. */ }
+  },10000);
 }

@@ -12,12 +12,12 @@ def test_chinese_search_prefers_source_and_includes_earlier_chapters(reader):
     page.get_by_role('button', name='find', exact=True).click()
     page.locator('#q').fill('月光')
     expect(page.locator('#find').get_by_role('combobox')).to_have_count(0)
-    expect(page.locator('#verdict')).to_have_text('Found in 3 source paragraphs across 2 chapters.')
+    expect(page.locator('#verdict')).to_have_text('3 matches in 3 source paragraphs across 2 chapters.')
     expect(page.locator('#hits')).to_contain_text('第一段月光')
     expect(page.locator('#hits')).to_contain_text('第二段月光')
     expect(page.locator('#hits')).to_contain_text('后来月光')
     page.locator('#q').fill('残稿')
-    expect(page.locator('#verdict')).to_have_text('Found in 1 translation paragraph across 1 chapter.')
+    expect(page.locator('#verdict')).to_have_text('1 match in 1 translation paragraph across 1 chapter.')
     expect(page.locator('#hits')).to_contain_text('Draft with 月光 and 残稿.')
     page.locator('#q').fill('不存在')
     expect(page.locator('#verdict')).to_have_text('No matches in the source or translation.')
@@ -26,19 +26,19 @@ def test_chinese_search_prefers_source_and_includes_earlier_chapters(reader):
 
 def test_translation_search_uses_drafts_without_changing_them(reader):
     page = reader['page']
-    page.locator('#ta').fill('Chapter 1\nMoonlight over the lake.\nMoonlight again.')
+    page.locator('#ta').fill('Chapter 1\nMoonlight over the lake.\nMoonlight again. Moonlight returns.')
     saved(reader)
     page.locator('#sel').select_option('2')
     page.locator('#ta').fill('The lake <script> & stars.')
     saved(reader)
     page.get_by_role('button', name='find', exact=True).click()
     page.locator('#q').fill('lake')
-    expect(page.locator('#verdict')).to_have_text('Found in 2 translation paragraphs across 2 chapters.')
+    expect(page.locator('#verdict')).to_have_text('2 matches in 2 translation paragraphs across 2 chapters.')
     expect(page.locator('#hits')).to_contain_text('Moonlight over the lake.')
     expect(page.locator('#hits')).to_contain_text('The lake <script> & stars.')
     assert page.locator('#hits script').count() == 0
     page.locator('#q').fill('Moonlight')
-    expect(page.locator('#verdict')).to_have_text('Found in 2 translation paragraphs across 1 chapter.')
+    expect(page.locator('#verdict')).to_have_text('3 matches in 2 translation paragraphs across 1 chapter.')
     page.locator('#find').get_by_role('button', name='close', exact=True).click()
     expect(page.locator('#ta')).to_have_js_property('value', 'The lake <script> & stars.')
 
