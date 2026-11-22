@@ -17,7 +17,7 @@ From the project directory on a machine with Docker Compose:
 docker compose up -d --build
 ```
 
-Open http://127.0.0.1:8000/. The named `reader_data` volume stores
+Open http://127.0.0.1:8888/. The named `reader_data` volume stores
 `/data/reader.sqlite3` and `/data/backups/`. Rebuilding the image preserves data.
 Do not remove the volume (`docker compose down -v` deletes it).
 
@@ -99,7 +99,7 @@ directory, then run `tests/original_reader_test.py`. See web/README.md.
 
 Arcane manages the reader as a Docker Compose project. The project file
 [compose.arcane.yaml](compose.arcane.yaml) pulls
-`ghcr.io/im-calvin/translate:latest`, runs the reader on port 8888 inside the
+`ghcr.io/im-calvin/kersimmy:latest`, runs the reader on port 8888 inside the
 container, publishes it at `127.0.0.1:8888` by default, and mounts an external
 Docker volume at `/data`.
 
@@ -150,7 +150,7 @@ Choose an update path:
   [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
 
 For a rollback, set `READER_IMAGE` in Arcane to a known-good
-`ghcr.io/im-calvin/translate:sha-<full commit SHA>` tag or digest and redeploy the
+`ghcr.io/im-calvin/kersimmy:sha-<full commit SHA>` tag or digest and redeploy the
 same project. A later change back to `latest` resumes updates from that tag.
 
 If the image is made private, add GHCR credentials to Arcane's Container

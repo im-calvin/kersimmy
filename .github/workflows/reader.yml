@@ -48,7 +48,7 @@ jobs:
       - name: Smoke-test the Docker app
         run: |
           docker compose up --detach --build --wait --wait-timeout 60
-          curl --fail --silent --show-error http://127.0.0.1:8000/api/status
+          curl --fail --silent --show-error http://127.0.0.1:8888/api/status
       - name: Remove the CI stack
         if: ${{ always() }}
         run: docker compose down --volumes

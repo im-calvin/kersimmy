@@ -159,7 +159,7 @@ workspace. The active implementation is in root `tools/` and `web/`.
 
 ```sh
 python3 tools/serve.py                       # library + original reader + SQLite
-docker compose up -d --build --wait           # local Docker app on port 8000
+docker compose up -d --build --wait           # local Docker app on port 8888
 python3 tools/reader_server.py --data ./data # same server, assets already built
 python3 tools/build_web.py                   # rebuild library/static adapter
 python3 tools/tlconfig.py                    # original parser diagnostics
@@ -225,7 +225,7 @@ Data lives at `/data` in containers, root `data/` locally; do not delete these.
 The service has no application login and binds to loopback by default. The
 production deployment uses an Arcane Docker Compose project. GitHub Actions
 tests pushes to `main` and publishes passing builds to
-`ghcr.io/im-calvin/translate` for AMD64 and ARM64. Use Ubuntu 24.04 for the test
+`ghcr.io/im-calvin/kersimmy` for AMD64 and ARM64. Use Ubuntu 24.04 for the test
 job to match the pinned Playwright release. Optional automatic redeploy requires
 repository variable `ARCANE_DEPLOY_ENABLED=true` and the `ARCANE_WEBHOOK_URL`
 secret in GitHub's `production` environment. Arcane records the deployment
@@ -240,7 +240,7 @@ reuse an existing volume. `READER_HOST_PORT` overrides the published loopback
 port. Arcane Git Pull sync uses `main` and `compose.arcane.yaml`. Confirm
 that the Compose file and workflow are pushed before relying on remote deploys.
 
-The workspace is a Git checkout tracking `main` on `im-calvin/translate`.
+The workspace is a Git checkout tracking `main` on `im-calvin/kersimmy`.
 Check `git status` and the remote branch before reporting what has shipped.
 The public repository and container builds exclude manuscripts, local config,
 database files, backups, and credentials.
