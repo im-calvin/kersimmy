@@ -26,13 +26,13 @@ from tlconfig import load_config, parse_source, pick
 from illustration import load_illustration
 import draft_comments
 import draft_editor
+import reader_theme
 from chapter_structure import options as chapter_options
 
 CSS = """
-.volume{font:12px/1.5 -apple-system,sans-serif;color:#8c8375;margin:0 0 .6rem}
+.volume{font:12px/1.5 -apple-system,sans-serif;color:var(--volume);margin:0 0 .6rem}
 
-:root{color-scheme:light;--fs:19px;--ink:#1b1a17;--dim:#a8a29a;--bg:#faf8f4;
-      --line:#eae5dc}
+:root{--fs:19px}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
@@ -42,18 +42,18 @@ header .sp{flex:1}
 header b{color:var(--ink);font-size:13px}
 select,button{font:inherit;color:var(--dim);background:none;border:0;
   padding:.2rem .4rem;border-radius:4px;cursor:pointer}
-select{color:var(--ink);border:1px solid var(--line);background:#fff;
+select{color:var(--ink);border:1px solid var(--line);background:var(--control);
   max-width:14rem}
-button:hover{color:var(--ink);background:#f0ebe2}
-button[aria-pressed="true"]{color:#8a6f12;background:#f6efdc}
-button.act{border:1px solid var(--line);background:#fff}
+button:hover{color:var(--ink);background:var(--hover)}
+button[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
+button.act{border:1px solid var(--line);background:var(--control)}
 #wrap{display:flex;height:calc(100% - 44px)}
 #cn{flex:1;overflow-y:auto;padding:1.7rem 1.7rem 50vh;border-right:1px solid var(--line);
   font-family:"Songti SC","Noto Serif CJK SC","Source Han Serif SC",serif}
-#cn h2{font-size:calc(var(--fs) * .95);font-weight:600;margin:0 0 1.3rem;color:#6b6455}
+#cn h2{font-size:calc(var(--fs) * .95);font-weight:600;margin:0 0 1.3rem;color:var(--heading)}
 #cn p{font-size:var(--fs);line-height:1.95;margin:0 0 .5em;text-indent:1em;
   border-radius:3px;transition:background .12s ease}
-#cn p.hit{background:#fdf4d8;box-shadow:-.6rem 0 0 -.55rem #c9a227}
+#cn p.hit{background:var(--reading);box-shadow:-.6rem 0 0 -.55rem var(--accent-line)}
 #cn p{cursor:pointer;user-select:text}
 #alignment-dialog{width:min(65rem,94vw);max-height:80vh;color:var(--ink);background:var(--bg);border:1px solid var(--line)}
 #alignment-dialog table{width:100%;border-collapse:collapse;table-layout:fixed}
@@ -62,39 +62,48 @@ button.act{border:1px solid var(--line);background:#fff}
 .reader-options summary{cursor:pointer}
 .reader-options div{position:absolute;right:1rem;z-index:35;background:var(--bg);border:1px solid var(--line);padding:.4rem}
 #pane{position:relative;flex:1;display:flex;flex-direction:column;min-width:0}
-#ta{flex:1;width:100%;border:0;outline:0;resize:none;background:#fffefb;
+#draft-help{position:absolute;top:.75rem;right:.75rem;z-index:25;
+  width:min(24rem,calc(100vw - 1.5rem));max-height:calc(100% - 4rem);overflow:auto;
+  padding:1rem;border:1px solid var(--line);border-radius:.5rem;
+  background:var(--bg);color:var(--ink);box-shadow:0 6px 20px #29241e20;
+  font-size:14px;line-height:1.45}
+#draft-help h2{margin:0;font-size:17px}
+#draft-help p{margin:.5rem 0 1rem}
+#draft-help .actions{display:flex;align-items:center;justify-content:flex-end;gap:.5rem}
+#draft-help button{color:var(--ink)}
+#ta{flex:1;width:100%;border:0;outline:0;resize:none;background:var(--surface);
   padding:1.7rem 1.7rem 40vh;font-family:"Iowan Old Style",Georgia,serif;
   font-size:var(--fs);line-height:1.7;color:var(--ink)}
-#ta::placeholder{color:#cfc8bc}
-#ta::highlight(translation-reading){background:#fdf4d8}
+#ta::placeholder{color:var(--placeholder)}
+#ta::highlight(translation-reading){background:var(--reading)}
 #foot{height:30px;display:flex;align-items:center;gap:.8rem;padding:0 .9rem;
   border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);
-  background:#faf8f4}
+  background:var(--bg)}
 #foot .sp{flex:1}
 #al{white-space:nowrap;color:var(--ink);font-variant-numeric:tabular-nums}
 #ind{font-variant-numeric:tabular-nums}
-#ind.dirty{color:#b8860b}
-#warn{display:none;color:#a33;font-weight:600}
-#find{position:absolute;inset:44px 0 0 0;background:#fffefb;z-index:30;
+#ind.dirty{color:var(--accent)}
+#warn{display:none;color:var(--error);font-weight:600}
+#find{position:absolute;inset:44px 0 0 0;background:var(--surface);z-index:30;
   display:none;flex-direction:column;padding:1rem 1.2rem}
 #find.on{display:flex}
 #find .top{display:flex;flex-wrap:wrap;gap:.7rem;align-items:center;padding-bottom:.9rem}
 #q{flex:1;font:17px/1.5 "Songti SC","Noto Serif CJK SC",serif;padding:.5rem .7rem;
-  border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink)}
-#find .top button{border:1px solid var(--line);background:#fff;padding:.4rem .8rem}
+  border:1px solid var(--line);border-radius:7px;background:var(--control);color:var(--ink)}
+#find .top button{border:1px solid var(--line);background:var(--control);padding:.4rem .8rem}
 #verdict{font-size:15px;font-weight:600;color:var(--ink);padding:.2rem 0 .1rem}
-#verdict.none{color:#6b7f5e}
-#verdict.recur{color:#8a6f12}
+#verdict.none{color:var(--status)}
+#verdict.recur{color:var(--accent)}
 #past{font-size:12.5px;color:var(--dim);padding-bottom:.7rem}
 #hits{flex:1;overflow-y:auto;border-top:1px solid var(--line);padding-top:.6rem}
-#hits .h{display:flex;gap:.8rem;padding:.4rem 0;border-bottom:1px solid #f4f0e8}
+#hits .h{display:flex;gap:.8rem;padding:.4rem 0;border-bottom:1px solid var(--line)}
 #hits .ref{flex:0 0 5.6rem;font-size:11.5px;color:var(--dim);
   font-variant-numeric:tabular-nums;padding-top:.2rem}
 #hits .tx{flex:1;font-family:"Songti SC","Noto Serif CJK SC",serif;
   font-size:15px;line-height:1.75}
 #hits .more{font-size:12px;color:var(--dim);padding:.7rem 0}
 #stats{position:absolute;left:0;top:44px;width:min(52%,37rem);
-  max-height:calc(100% - 52px);background:#fffefb;z-index:30;display:none;
+  max-height:calc(100% - 52px);background:var(--surface);z-index:30;display:none;
   flex-direction:column;border-right:1px solid var(--line);
   border-bottom:1px solid var(--line);border-bottom-right-radius:10px;
   box-shadow:0 10px 30px -14px rgba(0,0,0,.22)}
@@ -104,11 +113,11 @@ button.act{border:1px solid var(--line);background:#fff}
 #stats .top b{color:var(--ink);font-size:14px}
 #stats .top .sp{flex:1}
 #wpp{width:4.2rem;font:inherit;color:var(--ink);border:1px solid var(--line);
-  border-radius:5px;padding:.25rem .4rem;background:#fff;text-align:right}
+  border-radius:5px;padding:.25rem .4rem;background:var(--control);text-align:right}
 #stats .body{flex:1;overflow-y:auto;padding:1rem}
 .cards{display:grid;gap:.6rem;padding-bottom:1.1rem;
   grid-template-columns:repeat(3,1fr)}
-.card{border:1px solid var(--line);border-radius:10px;background:#fff;
+.card{border:1px solid var(--line);border-radius:10px;background:var(--control);
   padding:.8rem .85rem;aspect-ratio:1/.82;display:flex;flex-direction:column;
   justify-content:center}
 .card .k{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
@@ -117,17 +126,17 @@ button.act{border:1px solid var(--line);background:#fff}
   font-variant-numeric:tabular-nums}
 .card .s{font-size:11px;color:var(--dim);padding-top:.25rem;line-height:1.4}
 #gifcell{border:1px solid var(--line);border-radius:10px;overflow:hidden;
-  aspect-ratio:1/.82;background:#fff}
+  aspect-ratio:1/.82;background:var(--control)}
 #gifcell img{width:100%;height:100%;object-fit:cover;display:block}
-#bar{height:7px;border-radius:4px;background:#efe9dd;overflow:hidden;
+#bar{height:7px;border-radius:4px;background:var(--subtle);overflow:hidden;
   margin:0 0 1.4rem}
-#bar i{display:block;height:100%;background:#c9a227}
+#bar i{display:block;height:100%;background:var(--accent-line)}
 #stats h4{font-size:11px;letter-spacing:.07em;text-transform:uppercase;
   color:var(--dim);margin:0 0 .6rem;font-weight:600}
 .r{display:flex;align-items:center;gap:.6rem;padding:.33rem 0;font-size:13px}
 .r .w{flex:0 0 7.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.r .b{flex:1;height:11px;background:#f1ece2;border-radius:3px;overflow:hidden}
-.r .b i{display:block;height:100%;background:#b9a15f;border-radius:3px}
+.r .b{flex:1;height:11px;background:var(--subtle);border-radius:3px;overflow:hidden}
+.r .b i{display:block;height:100%;background:var(--accent-line);border-radius:3px}
 .r .n{flex:0 0 2.3rem;text-align:right;color:var(--dim);
   font-variant-numeric:tabular-nums}
 .note{font-size:11.5px;color:var(--dim);padding:1.4rem 0 0;line-height:1.6;
@@ -550,7 +559,7 @@ function readMatchingTranslation(source){
 /* Ordinary reading clicks must never change saved alignment. */
 function isAlignmentGesture(event){
   return syncOn&&event.button===0
-    &&!event.ctrlKey&&!event.metaKey&&(event.altKey!==event.shiftKey);
+    &&!event.ctrlKey&&!event.metaKey&&(event.altKey||event.shiftKey);
 }
 cn.addEventListener('mousedown',event=>{
   if(isAlignmentGesture(event)&&event.target.closest('p[id]'))event.preventDefault();
@@ -569,10 +578,10 @@ cn.addEventListener('click',e=>{
   const english=readingEnglish??(caretInView()?enCaret()+1:currentEnglish), source=Number(match[1]);
   const groups=alignmentGroups[cur]||{};
   if(e.shiftKey||Object.keys(groups).length){
-    const [start]=sourceRange(english);
-    const anchor=start>=1&&start<=chap(cur).paras.length?start:source;
-    const first=e.shiftKey?Math.min(anchor,source):source;
-    const last=e.shiftKey?Math.max(anchor,source):source;
+    const [start,end]=sourceRange(english), sourceCount=chap(cur).paras.length;
+    const canExtend=e.shiftKey&&start>=1&&end<=sourceCount;
+    const first=canExtend?Math.min(start,source):source;
+    const last=canExtend?Math.max(end,source):source;
     if(canAlign(english,first,last)){
       groups[english]=[first,last];
       alignmentGroups[cur]=groups;
@@ -752,7 +761,7 @@ function bars(rows,el,max){
     ? rows.map(r=>'<div class="r"><span class="w">'+esc(r[0])+'</span>'
        +'<span class="b"><i style="width:'+(r[1]/max*100).toFixed(1)+'%"></i></span>'
        +'<span class="n">'+r[1]+'</span></div>').join('')
-    : '<div class="r" style="color:#a8a29a">nothing yet</div>';
+    : '<div class="r" style="color:var(--dim)">nothing yet</div>';
 }
 function openStats(){
   document.getElementById('stats').classList.add('on'); renderStats();
@@ -968,8 +977,48 @@ const viewMenu=document.querySelector('.reader-options');
 document.addEventListener('click',event=>{
   if(viewMenu.open&&!viewMenu.contains(event.target))viewMenu.open=false;
 });
+const draftHelp=document.getElementById('draft-help');
+const helpSteps=[...draftHelp.querySelectorAll('section')];
+const helpBack=document.getElementById('draft-help-back');
+const helpNext=document.getElementById('draft-help-next');
+const helpKey='translation-reader:draft-help-v1';
+let helpStep=0;
+function showDraftHelpStep(){
+  helpSteps.forEach((step,index)=>step.hidden=index!==helpStep);
+  helpBack.hidden=helpStep===0;
+  helpNext.textContent=helpStep===helpSteps.length-1?'Start translating':'Next';
+}
+function closeDraftHelp(focusEditor=false){
+  if(draftHelp.hidden)return;
+  draftHelp.hidden=true;
+  try{window.localStorage.setItem(helpKey,'1')}catch{}
+  if(focusEditor)ta.focus();
+}
+document.getElementById('open-draft-help').addEventListener('click',()=>{
+  viewMenu.open=false;
+  helpStep=0;
+  showDraftHelpStep();
+  draftHelp.hidden=false;
+  helpNext.focus();
+});
+helpBack.addEventListener('click',()=>{
+  helpStep--;
+  showDraftHelpStep();
+  if(helpBack.hidden)helpNext.focus();
+});
+helpNext.addEventListener('click',()=>{
+  if(helpStep===helpSteps.length-1){closeDraftHelp(true);return}
+  helpStep++;
+  showDraftHelpStep();
+});
+document.getElementById('draft-help-skip').addEventListener('click',()=>closeDraftHelp(true));
+document.addEventListener('pointerdown',event=>{
+  if(!draftHelp.contains(event.target))closeDraftHelp();
+});
+ta.addEventListener('focus',()=>closeDraftHelp());
 addEventListener('keydown',e=>{
   if(e.target.closest('dialog'))return;
+  if(e.key==='Escape'&&!draftHelp.hidden){e.preventDefault();closeDraftHelp(true);return}
   if(e.key==='Escape'&&viewMenu.open){viewMenu.open=false;viewMenu.querySelector('summary').focus();return}
   if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();commit();return}
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();copyDocs();return}
@@ -989,6 +1038,7 @@ addEventListener('keydown',e=>{
   cn.classList.toggle('linked',syncOn);
   if(!chap(cur))cur=CH[0].no;
   load(cur); sizeCheck();
+  try{draftHelp.hidden=window.localStorage.getItem(helpKey)==='1'}catch{draftHelp.hidden=false}
 })();
 """
 
@@ -999,6 +1049,7 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Draft</title>
+<script data-reader-theme>{theme_script}</script>
 <style>{css}</style>
 </head>
 <body>
@@ -1016,6 +1067,8 @@ PAGE = """<!DOCTYPE html>
     &ldquo;&nbsp;&rdquo;</button>
   <button onclick="fs(-1)">A&minus;</button>
   <button onclick="fs(1)">A+</button>
+  {theme_control}
+  <button type="button" id="open-draft-help" aria-controls="draft-help">Walkthrough</button>
   <label>Comment highlight
     <select id="comment-tone">
       <option value="light-purple">Light purple</option>
@@ -1047,6 +1100,27 @@ PAGE = """<!DOCTYPE html>
   <div id="pane">
     <div id="ta" contenteditable="true" role="textbox" aria-label="Translation" aria-multiline="true" spellcheck="true"></div>
     <div id="comment-marks" aria-hidden="true"></div>
+    <aside id="draft-help" aria-label="Draft walkthrough" hidden>
+      <div aria-live="polite">
+        <section>
+          <h2>Start your draft</h2>
+          <p>Choose a chapter at the top. Read Chinese on the left and write your English translation on the right. Drafts save automatically. Use the Italic button or Cmd/Ctrl+I for italics.</p>
+        </section>
+        <section hidden>
+          <h2>Link Chinese and English</h2>
+          <p>With sync on, click a Chinese paragraph to read its English. To link several Chinese paragraphs to one English line, put the cursor in that line, Option/Alt-click the first Chinese paragraph, then Shift-click the last.</p>
+        </section>
+        <section hidden>
+          <h2>Comment and export</h2>
+          <p>Select English text and click the speech bubble to add a note. Click marked text to reopen it. Use Word to download your draft with its formatting and comments.</p>
+        </section>
+      </div>
+      <div class="actions">
+        <button type="button" id="draft-help-skip">Skip</button>
+        <button type="button" id="draft-help-back" hidden>Back</button>
+        <button type="button" id="draft-help-next" class="act">Next</button>
+      </div>
+    </aside>
     <div id="foot">
       <span id="ind">&nbsp;</span>
       <span id="wc"></span>
@@ -1126,7 +1200,8 @@ def render_page(cfg, chapters, illustration=None):
     gif = ('<div id="gifcell"><img src="{}" alt=""></div>'.format(html.escape(cfg['illustration'], quote=True)) if cfg.get('illustration') else '')
     js = js.replace("'__PROJ__ draft backup · '", json.dumps(cfg['project'] + ' draft backup · ', ensure_ascii=False).replace('<', '\\u003c'))
     js = js.replace('__GIF__', gif)
-    return PAGE.replace('<script src="corpus.js"></script>', draft_comments.HTML + '<script src="corpus.js"></script>').format(css=CSS + draft_comments.CSS + draft_editor.CSS, js=js,
+    return PAGE.replace('<script src="corpus.js"></script>', draft_comments.HTML + '<script src="corpus.js"></script>').format(css=reader_theme.CSS + CSS + draft_comments.CSS + draft_editor.CSS, js=js,
+            theme_script=reader_theme.SCRIPT, theme_control=reader_theme.CONTROL,
             alignment='' if inline_alignment else ALIGNMENT_DIALOG,
             alignment_button='' if inline_alignment else ALIGNMENT_BUTTON)
 

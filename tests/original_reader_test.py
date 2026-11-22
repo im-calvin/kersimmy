@@ -63,7 +63,7 @@ with sync_playwright() as playwright:
         page.mouse.click(2,2)
         expect(page.locator('#find')).not_to_have_class('on')
         print('PASS: original statistics, GIF customization, contextual search, click-outside dismissal',flush=True)
-        page.get_by_role('link',name='Review',exact=True).click()
+        page.goto(draft_url.removesuffix('/draft')+'/review')
         expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
         page.get_by_role('button',name='use current drafts',exact=True).click()
         expect(page.locator('#en')).to_contain_text('Third paragraph.')

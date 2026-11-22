@@ -16,33 +16,33 @@ import html
 import json
 import sys
 
+import reader_theme
 from chapter_structure import options as chapter_options, number as chapter_number, metadata
 from tlconfig import load_config, parse_source, pick
 
 CSS = """
-.volume{font:12px/1.5 -apple-system,sans-serif;color:#8c8375;margin:0 0 .6rem}
+.volume{font:12px/1.5 -apple-system,sans-serif;color:var(--volume);margin:0 0 .6rem}
 
-:root{color-scheme:light;--fs:18px;--ink:#1b1a17;--dim:#a8a29a;--bg:#faf8f4;
-      --line:#eae5dc;--hl:#fff3b0}
+:root{--fs:18px}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);overflow:hidden}
 body{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
 header{height:44px;display:flex;align-items:center;gap:.7rem;padding:0 .9rem;
   border-bottom:1px solid var(--line);font-size:13px;color:var(--dim);
-  background:#faf8f4}
+  background:var(--bg)}
 header .sp{flex:1}
 header b{color:var(--ink);font-size:13px;font-weight:600}
 select,button{font:inherit;color:var(--dim);background:none;border:0;
   padding:.2rem .35rem;border-radius:4px;cursor:pointer}
-select{color:var(--ink);border:1px solid var(--line);background:#fff}
-button:hover{color:var(--ink);background:#f0ebe2}
-button[aria-pressed="true"]{color:#8a6f12;background:#f6efdc}
+select{color:var(--ink);border:1px solid var(--line);background:var(--control)}
+button:hover{color:var(--ink);background:var(--hover)}
+button[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
 #wrap{display:flex;height:calc(100% - 44px)}
 section{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;
   padding:1.6rem 1.6rem 60vh;scroll-behavior:auto}
 #cn{border-right:1px solid var(--line)}
 section h2{font-size:calc(var(--fs) * .95);font-weight:600;margin:2.2rem 0 1.1rem;
-  padding-top:.4rem;border-top:1px solid var(--line);color:#6b6455}
+  padding-top:.4rem;border-top:1px solid var(--line);color:var(--heading)}
 section h2:first-of-type{margin-top:0;border-top:0}
 section p{font-size:var(--fs);margin:0 0 .5em;text-indent:1em}
 #cn p,#cn h2{font-family:"Songti SC","Noto Serif CJK SC","Source Han Serif SC",serif;
@@ -52,17 +52,17 @@ section p{font-size:var(--fs);margin:0 0 .5em;text-indent:1em}
 #en p{text-indent:1.2em}
 .empty{color:var(--dim);font-size:13px;font-family:-apple-system,sans-serif;
   text-indent:0;line-height:1.7;max-width:26rem}
-.hit{background:var(--hl);border-radius:3px}
-#editor{position:absolute;inset:44px 0 0 0;background:#fffefb;z-index:20;
+.hit{background:var(--review-hit);border-radius:3px}
+#editor{position:absolute;inset:44px 0 0 0;background:var(--surface);z-index:20;
   display:none;flex-direction:column;padding:1rem}
 #editor.on{display:flex}
 #editor textarea{flex:1;width:100%;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,
   monospace;padding:1rem;border:1px solid var(--line);border-radius:7px;
-  resize:none;background:#fff;color:var(--ink)}
+  resize:none;background:var(--control);color:var(--ink)}
 #editor .row{display:flex;align-items:center;gap:.8rem;padding:.6rem 0 .8rem;
   font-size:13px;color:var(--dim)}
-#editor button{border:1px solid var(--line);background:#fff;padding:.35rem .8rem}
-#editor .save{color:#1b1a17;font-weight:600;border-color:#c9a227;background:#fdf7e3}
+#editor button{border:1px solid var(--line);background:var(--control);padding:.35rem .8rem}
+#editor .save{color:var(--ink);font-weight:600;border-color:var(--accent-line);background:var(--accent-soft)}
 """
 
 JS = r"""
@@ -214,6 +214,7 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Side by side</title>
+<script data-reader-theme>{theme_script}</script>
 <style>{css}</style>
 </head>
 <body>
@@ -229,6 +230,7 @@ PAGE = """<!DOCTYPE html>
   <button id="m-off" onclick="setMode('off')">off</button>
   <button onclick="fs(-1)">A&minus;</button>
   <button onclick="fs(1)">A+</button>
+  {theme_control}
   <button onclick="openEditor()" title="paste or edit your English">paste English</button>
 </header>
 <div id="wrap">
@@ -237,7 +239,7 @@ PAGE = """<!DOCTYPE html>
 </div>
 <div id="editor">
   <div class="row">
-    <b style="color:#1b1a17">Paste your English</b>
+    <b style="color:var(--ink)">Paste your English</b>
     <span>separate chapters with a line reading <b>Chapter 4</b> &mdash;
       no heading means it goes to the chapter in the dropdown. If numbering restarts, include the volume heading before its chapters.</span>
     <span class="sp" style="flex:1"></span>
@@ -264,7 +266,10 @@ def render_page(cfg, chapters):
         cn.extend('<p id="c{}p{}">{}</p>'.format(c['no'], i + 1, html.escape(p)) for i, p in enumerate(c['paras']))
     options = chapter_options(chapters, titles=False)
     meta = json.dumps([{'no':c['no'], 'title':c['title'], **metadata(c)} for c in chapters], ensure_ascii=False).replace('<', '\\u003c')
-    return PAGE.format(css=CSS, js=JS.replace('__CHAPTERS__', meta).replace('__PFX__', cfg['storage_prefix']), cn='\n'.join(cn), options=options)
+    return PAGE.format(css=reader_theme.CSS + CSS, theme_script=reader_theme.SCRIPT,
+                       theme_control=reader_theme.CONTROL,
+                       js=JS.replace('__CHAPTERS__', meta).replace('__PFX__', cfg['storage_prefix']),
+                       cn='\n'.join(cn), options=options)
 
 
 def main():

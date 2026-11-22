@@ -9,7 +9,7 @@
   background: var(--bg);
   font-size: 14px;
 }
-#glossary-dialog::backdrop { background: #28332365; }
+#glossary-dialog::backdrop { background: var(--scrim); }
 #glossary-dialog h2 { margin: 0; font-size: 18px; }
 #glossary-dialog .glossary-table { overflow-x: auto; }
 #glossary-dialog table { width: 100%; border-collapse: collapse; }
@@ -25,7 +25,7 @@
   border: 1px solid var(--line);
   border-radius: .25rem;
   color: var(--ink);
-  background: #fff;
+  background: var(--control);
   font: inherit;
 }
 #glossary-dialog .glossary-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -33,7 +33,7 @@
 #glossary-dialog button:disabled { opacity: .5; cursor: default; }
 #cn .glossary-term {
   text-decoration: underline;
-  text-decoration-color: #be3535;
+  text-decoration-color: var(--glossary);
   text-underline-offset: .16em;
 }
 #glossary-tooltip {

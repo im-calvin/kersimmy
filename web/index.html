@@ -1,9 +1,15 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Library · Translation Reader</title><link rel="stylesheet" href="style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Library · Translation Reader</title><script src="theme.js"></script><link rel="stylesheet" href="style.css"></head>
 <body>
 <main class="library">
-  <header class="masthead"><a class="wordmark" href="./">Translation Reader</a><span class="device-label">Your words, your workspace</span></header>
+  <header class="masthead"><a class="wordmark" href="./">Translation Reader</a>
+    <div class="masthead-options"><span class="device-label">Your words, your workspace</span>
+      <label class="theme-setting">Theme
+        <select data-theme-setting aria-label="Theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+      </label>
+    </div>
+  </header>
   <section class="intro"><p class="eyebrow">THE LIBRARY</p><h1>A place for your next chapter.</h1><p>Bring a manuscript. Read closely. Make it your own.</p></section>
   <div class="library-actions"><button class="primary" id="add-book">＋ Add manuscript</button><button id="restore">Restore backup</button><button id="backup-library">Back up library</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
   <p id="message" role="status" aria-live="polite"></p>

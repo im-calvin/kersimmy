@@ -8,8 +8,8 @@ CSS = """
 #comment-add{position:fixed;z-index:35;color:var(--ink);display:grid;place-items:center;
   width:32px;height:32px;padding:0;box-shadow:0 2px 8px #29241e26}
 #comment-add[hidden]{display:none}
-#comment-add:hover{background:#f0ebe2}
-#reattach-comments{color:#6d4294;white-space:nowrap}
+#comment-add:hover{background:var(--hover)}
+#reattach-comments{color:var(--comment-link);white-space:nowrap}
 .comment-add-icon{position:relative;display:grid;place-items:center;box-sizing:border-box;
   width:18px;height:14px;margin-bottom:3px;border:1.5px solid currentColor;border-radius:4px;
   font:600 12px/1 system-ui,sans-serif;background:inherit}
@@ -21,15 +21,18 @@ CSS = """
 #comments-dialog h2{font-size:17px;margin:0 0 1rem}
 #comments-dialog textarea{width:100%;min-height:5rem;box-sizing:border-box;
   font:15px/1.5 Georgia,serif;padding:.6rem;margin:.5rem 0}
-#comments-dialog blockquote{margin:.6rem 0;color:#6b6455;white-space:pre-wrap}
+#comments-dialog blockquote{margin:.6rem 0;color:var(--heading);white-space:pre-wrap}
 #comments-dialog .comment{border-top:1px solid var(--line);padding:.7rem 0}
 #comment-marks{position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;
   --comment-fill:#edcfff;--comment-underline:#6d4294}
 #comment-marks[data-tone="purple"]{--comment-fill:#e4bfff}
 #comment-marks[data-tone="light-blue"]{--comment-fill:#cce5ff;--comment-underline:#38638d}
+:root[data-theme="dark"] #comment-marks{mix-blend-mode:screen;--comment-fill:#352044;--comment-underline:#c29cdb}
+:root[data-theme="dark"] #comment-marks[data-tone="purple"]{--comment-fill:#4a2465}
+:root[data-theme="dark"] #comment-marks[data-tone="light-blue"]{--comment-fill:#12344b;--comment-underline:#85badf}
 #comment-marks span{position:absolute;background:var(--comment-fill);border-bottom:2px solid var(--comment-underline)}
 #comments-dialog .comment p{white-space:pre-wrap;overflow-wrap:anywhere}
-#comment-message{font-size:13px;color:#6b6455}
+#comment-message{font-size:13px;color:var(--heading)}
 #comment-message:empty,#comment-selection:empty{display:none}
 #comments-dialog .actions{display:flex;justify-content:flex-end;gap:.5rem}
 """

@@ -89,22 +89,27 @@ jobs:
 
   deploy:
     needs: publish
-    if: ${{ vars.PORTAINER_DEPLOY_ENABLED == 'true' }}
+    if: ${{ vars.ARCANE_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production
     permissions: {}
     steps:
-      - name: Request Portainer redeployment
+      - name: Request Arcane project redeployment
         env:
-          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
         run: |
-          if [ -z "$PORTAINER_WEBHOOK_URL" ]; then
-            echo 'Set the production PORTAINER_WEBHOOK_URL secret before enabling deployment.'
+          if [ -z "$ARCANE_WEBHOOK_URL" ]; then
+            echo 'Set the production ARCANE_WEBHOOK_URL secret before enabling deployment.'
             exit 1
           fi
-          if ! curl --proto '=https' --fail --silent --output /dev/null \
-              --max-time 60 --request POST "$PORTAINER_WEBHOOK_URL"; then
-            echo 'Portainer did not accept the webhook. Check reachability and the webhook settings.'
+          if ! status=$(curl --proto '=https' --silent --output /dev/null \
+            --write-out '%{http_code}' --max-time 60 --request POST "$ARCANE_WEBHOOK_URL"); then
+            echo 'GitHub Actions could not reach the Arcane webhook.'
             exit 1
           fi
+          if [ "$status" != 202 ]; then
+            echo "Arcane webhook returned HTTP $status. Check reachability and the webhook settings."
+            exit 1
+          fi
+          echo 'Arcane accepted the request. Check its Event Log for the deployment result.'

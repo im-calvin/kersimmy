@@ -34,44 +34,37 @@ rerun delivery manually. The workflow publishes with GitHub's built-in token.
 The repository and image exclude manuscripts, the local book configuration,
 database files, and backups. [GitHub image publishing](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images)
 
-## Deploy the image in Portainer
+## Deploy in Arcane
 
-1. After the first successful publish, add `ghcr.io` as a registry in Portainer.
-   For a private image, use a GitHub account with access to the package and a
-   classic personal access token with `read:packages`. Store the token in Portainer.
-   [GitHub registry authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry)
-2. In **Stacks**, update the existing reader stack or create one named
-   `translation-reader`. Use [compose.portainer.yaml](compose.portainer.yaml).
-   Keep the existing stack name and `reader_data` volume so the new image opens
-   the same database. Set these stack environment variables:
+1. Set up Arcane on the Docker host that will run the reader, or pick that host
+   as an agent in an existing Arcane installation. [Arcane installation](https://getarcane.app/docs/get-started/installation)
+2. Create the reader data volume on that host with
+   `docker volume create translation-reader_reader_data`. If you have an existing
+   reader on the host, use its existing volume name as `READER_DATA_VOLUME`.
+3. In **Projects → Create Project**, name it `translation-reader` and paste
+   [compose.arcane.yaml](compose.arcane.yaml). Add an `.env` file with the name of
+   the Docker network shared with cloudflared. For example:
 
    ```dotenv
-   READER_IMAGE=ghcr.io/owner/repository:latest
-   CLOUDFLARED_NETWORK=your-existing-tunnel-network
+   CLOUDFLARED_NETWORK=tunnel
    ```
 
-3. Enable **Re-pull image** when deploying or updating the registry-backed stack.
-   Keep Cloudflare Access enabled before routing public traffic to the reader.
-   The [Portainer and tunnel setup](DEPLOYMENT.md#portainer-standalone-and-translatebxian03com)
-   describes the network and route. Verify the new container reports healthy and
-   the existing library opens. [Portainer stack setup](https://docs.portainer.io/user/docker/stacks/add)
-4. To roll back, set `READER_IMAGE` to the last known-good `sha-<full commit SHA>`
-   image and update the same stack.
+4. Save the project and click **Up**. Check that the reader container is healthy.
+   Route the Cloudflare tunnel to `http://translation-reader:8000`. See the
+   [production setup guide](DEPLOYMENT.md#production-arcane-and-cloudflare) for
+   migration, Access configuration, and rollbacks. [Arcane project documentation](https://getarcane.app/docs/docker/projects)
 
-### Optional automatic deployment
+### Automatic deployment
 
-For a Git-backed Portainer stack, point it to `main` and `compose.portainer.yaml`.
-Enable **GitOps updates**, choose **Webhook**, and enable **Re-pull image** and
-**Force redeployment** so a rebuilt image can be pulled even when Git has no new
-commit. For an existing editor-managed stack, use its stack webhook if your
-Portainer edition supports it. Keep the Portainer dashboard private and use an
-HTTPS webhook reachable from the GitHub runner. [Portainer GitOps options](https://docs.portainer.io/user/docker/stacks/add#gitops-updates), [Portainer stack webhooks](https://docs.portainer.io/user/docker/stacks/webhooks)
+For an immediate redeploy after images publish, create a **Project → Redeploy**
+webhook in Arcane under **System → Webhooks**. Save the full URL as
+`ARCANE_WEBHOOK_URL` in the GitHub `production` environment and set the
+repository Actions variable `ARCANE_DEPLOY_ENABLED` to `true`. GitHub Actions calls
+the webhook after a successful publish. Arcane records the background
+deployment result in its Event Log. [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
 
-In GitHub, create a `production` environment and add the webhook URL as its
-`PORTAINER_WEBHOOK_URL` secret. Set the repository Actions variable
-`PORTAINER_DEPLOY_ENABLED` to `true`. GitHub requests a redeploy only after the
-image is published. Check the Portainer stack's health after the webhook runs.
-Leave the variable unset for manual deployment and rollbacks.
+For a private Arcane dashboard, use Arcane's scheduled image updates or choose
+**Redeploy** in the project after a publish. [Arcane update options](https://getarcane.app/docs/docker/auto-updates)
 
 ## Tests
 

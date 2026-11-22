@@ -297,6 +297,24 @@ def test_one_english_paragraph_can_highlight_a_saved_source_range(reader):
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p1')
 
 
+def test_source_range_can_extend_in_both_directions_with_option_held(reader):
+    page = reader['page']
+    editor = page.locator('#ta')
+    editor.fill('One translation for all three paragraphs.')
+    editor.evaluate('el=>el.setSelectionRange(0,0)')
+    page.locator('#c1p2').click(modifiers=['Alt'])
+    expect(page.locator('#al')).to_contain_text('EN 1 ↔ 中文 2')
+    page.locator('#c1p3').click(modifiers=['Alt', 'Shift'])
+    expect(page.locator('#al')).to_contain_text('EN 1 ↔ 中文 2–3')
+    page.locator('#c1p1').click(modifiers=['Shift'])
+    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–3')
+    expect(page.locator('#cn p.hit')).to_have_count(3)
+    saved(reader)
+    page.reload()
+    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–3')
+    expect(page.locator('#cn p.hit')).to_have_count(3)
+
+
 def test_older_overlapping_links_are_read_in_forward_order(page, reader_environment):
     base = reader_environment['base']
     response = page.request.post(base + '/api/import', data={'books': [{

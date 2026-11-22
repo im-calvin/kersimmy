@@ -1,8 +1,8 @@
-# SQLite server and Docker deployment
+# SQLite server and container deployment
 
 For GitHub Actions, registry images, and automatic deployment, see the
 [deployment quick start](README.md#github-actions). The steps below include the
-local-image alternative and the detailed Portainer and Cloudflare setup.
+local Docker setup and the production Arcane and Cloudflare setup.
 
 The original Python parser and page generators power the reader. A small Python
 service provides book setup, SQLite storage, synchronization and backups. It
@@ -21,15 +21,9 @@ Open http://127.0.0.1:8000/. The named `reader_data` volume stores
 `/data/reader.sqlite3` and `/data/backups/`. Rebuilding the image preserves data.
 Do not remove the volume (`docker compose down -v` deletes it).
 
-Use `compose.portainer.yaml` for Portainer and follow the steps below. Both
-stacks run as UID/GID 10001 with a read-only container filesystem. SQLite and
-its snapshots write to the named volume, and manuscript previews use a temporary
-filesystem at `/tmp`. The image starts with an empty library. Import a
-full-project JSON backup or add a manuscript after launch.
-
-The local stack publishes to loopback only. The Portainer stack joins the existing
-connector network. Put Cloudflare Access in front of the reader because the
-application has no built-in login.
+The container runs as UID/GID 10001 with a read-only root filesystem. SQLite
+and its snapshots write to the named volume. A fresh volume starts with an
+empty library, ready for a manuscript or a full-project backup.
 
 ## Automatic saves, sync, and backups
 
@@ -101,79 +95,83 @@ python3 -m unittest discover -s tests -p server_test.py
 For end-to-end checks, start a test server on port 8002 with a temporary data
 directory, then run `tests/original_reader_test.py`. See web/README.md.
 
-## Portainer Standalone and translate.bxian03.com
+## Production Arcane and Cloudflare
 
-This deployment uses your existing cloudflared container; it does not create
-another tunnel or need its token. The reader has no published host port in
-`compose.portainer.yaml` and is reachable by the connector on its shared network.
+Arcane manages the reader as a Docker Compose project. The project file
+[compose.arcane.yaml](compose.arcane.yaml) pulls
+`ghcr.io/im-calvin/translate:latest`, attaches it to the cloudflared network,
+and mounts an external Docker volume at `/data`.
 
-1. Copy this project to the Portainer Docker host and build there:
+1. Install Arcane with its [Docker Compose instructions](https://getarcane.app/docs/get-started/installation)
+   if it is new to the host. Open its dashboard, select the Docker agent that
+   runs cloudflared, and find the connector's user-defined network in the
+   container details. On the Docker host, the equivalent query is:
 
    ```sh
-   docker build -t translation-reader:local .
+   docker inspect cloudflared --format '{{range $name, $network := .NetworkSettings.Networks}}{{println $name}}{{end}}'
    ```
 
-   Building on the target host also avoids Mac ARM versus server x86 image
-   differences. Uploading only the Compose file does not upload/build the app.
+2. For a fresh library, run `docker volume create translation-reader_reader_data`
+   on the Docker host. For a migration on the same Docker host, find the old
+   reader's named volume mounted at `/data` and set `READER_DATA_VOLUME` to that
+   name. Back up the library and stop the old reader before starting the new
+   project against its volume. To migrate across hosts, deploy with a fresh
+   volume and restore a full-library JSON backup in the new reader.
+3. In Arcane, open **Projects → Create Project** and name it
+   `translation-reader`. Paste the YAML from [compose.arcane.yaml](compose.arcane.yaml).
+   Under **Add .env file**, set `CLOUDFLARED_NETWORK` to the connector network.
+   Add `READER_DATA_VOLUME` if using a different volume and `READER_IMAGE` if
+   pinning a specific release. Save and click **Up**. The named volume is
+   external to this Compose project and persists across redeployments.
+   [Arcane project documentation](https://getarcane.app/docs/docker/projects)
+4. Protect `translate.bxian03.com` with Cloudflare Access and set the existing
+   tunnel origin to `http://translation-reader:8000`. Keep the default HTTP
+   Host header. Confirm the reader container reports healthy, the library
+   opens, and the hostname requires Access sign-in.
+   [Cloudflare tunnel routing](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/)
 
-2. In Portainer, inspect your cloudflared container's Networks section. Choose an
-   existing user-defined bridge network. If it has only Docker's default `bridge`
-   network, create a user-defined bridge network called `tunnel` and attach
-   cloudflared to it. Include that attachment in cloudflared's own stack so a
-   redeployment preserves it.
+If cloudflared runs on the host, you can instead remove the Compose network
+entries and add `ports: ["127.0.0.1:8000:8000"]` under the reader service.
+Set the tunnel origin to `http://127.0.0.1:8000`.
 
-   If you build on a different machine with the same CPU architecture, transfer
-   the image with `docker save -o translation-reader.tar translation-reader:local`
-   and run `docker load -i translation-reader.tar` on the Portainer Docker host.
-   You can also supply a registry image with `READER_IMAGE` in step 3.
+### Updates and rollback
 
-3. Choose Stacks → Add stack, name it `translation-reader`, and paste or upload
-   `compose.portainer.yaml`. For an existing deployment, update the existing stack
-   under its current name so Compose continues using the same SQLite volume.
-   Add this stack environment variable:
+Choose an update path:
 
-   ```text
-   CLOUDFLARED_NETWORK=<the network name from step 2>
-   ```
+- **Manual**. In the reader's Arcane project, choose **Redeploy** to pull the
+  current image and recreate the container.
+- **Scheduled**. Under **Settings → Automations**, select the agent and turn
+  on **Image Update Watcher** and **Auto Update**. Check **Excluded Containers**
+  for any other workloads on the same agent that should keep their current
+  images. [Arcane auto-update documentation](https://getarcane.app/docs/docker/auto-updates)
+- **On publish**. In **System → Webhooks**, create a webhook for the reader
+  project with the **Redeploy** action. Save its full HTTPS URL as the
+  `ARCANE_WEBHOOK_URL` secret in the GitHub `production` environment and set
+  `ARCANE_DEPLOY_ENABLED=true` as a repository Actions variable. The URL is a
+  credential. GitHub-hosted runners need to reach its endpoint over HTTPS.
+  A successful request queues the job. Check Arcane's Event Log and the reader
+  container's health for the result.
+  [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
 
-   Deploy using the image already on the host and leave **Re-pull image** off
-   for `translation-reader:local`. The stack creates `translation-reader_reader_data`
-   on a fresh deployment with that stack name. When updating the local image,
-   build on the Docker host again, then update the same stack and check that
-   the reader container was recreated. You can set `BACKUP_INTERVAL_SECONDS`
-   and `BACKUP_KEEP` in Portainer to override the defaults.
+For a rollback, set `READER_IMAGE` in Arcane to a known-good
+`ghcr.io/im-calvin/translate:sha-<full commit SHA>` tag or digest and redeploy the
+same project. A later change back to `latest` resumes updates from that tag.
 
-4. Before publishing the hostname, configure a Cloudflare Access self-hosted
-   application for `translate.bxian03.com` and an Allow policy for your email.
-   An email one-time code is a simple option if enabled in your Access login
-   methods. This protects the entire application and API; the app itself has
-   no username/password login. A tunnel alone does not add authentication.
+If the image is made private, add GHCR credentials to Arcane's Container
+Registries for the selected agent. Use a classic GitHub token with
+`read:packages`.
+[GHCR authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-to-the-container-registry)
 
-5. In the existing Cloudflare tunnel's Published application routes (called
-   Public Hostnames in some dashboard versions), add:
+### Restore an Arcane database snapshot
 
-   ```text
-   Subdomain: translate
-   Domain: bxian03.com
-   Path: leave blank
-   Service type: HTTP
-   URL: translation-reader:8000
-   ```
+From the Arcane project directory on the Docker host, use its Compose file and
+`.env` to stop the reader and restore a retained SQLite snapshot:
 
-   The full origin is `http://translation-reader:8000`, not localhost: localhost
-   inside cloudflared refers to the connector's own container. Keep the default
-   HTTP Host header so browser same-origin checks see the public hostname.
+```sh
+docker compose stop reader
+docker compose run --rm --no-deps reader python tools/restore_reader.py /data/backups/reader-TIMESTAMP.sqlite3
+docker compose up -d reader
+```
 
-6. Open `https://translate.bxian03.com`, sign in through Access, and restore a JSON
-   library backup from the local site. Confirm an edit appears on a second device
-   and survives restarting the reader container. Check the library shows automatic
-   SQLite backups with no errors. In a private browser window, verify Access
-   blocks the site before login.
-
-The public route, Access application, server image build, and Portainer deployment
-must still be applied in your infrastructure. These files prepare that setup;
-no remote settings were changed from the development workspace.
-
-Official references:
-- https://docs.portainer.io/user/docker/stacks/add
-- https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/
+Replace the filename with a saved snapshot. Reload the reader on all devices
+after the restore.

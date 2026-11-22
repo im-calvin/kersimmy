@@ -2,7 +2,7 @@
 
 CSS = """
 #ta{min-height:0;overflow:auto;white-space:pre-wrap;overflow-wrap:break-word;position:relative}
-#ta[data-empty="true"]::before{content:"Translate here.";color:#cfc8bc;position:absolute;pointer-events:none}
+#ta[data-empty="true"]::before{content:"Translate here.";color:var(--placeholder);position:absolute;pointer-events:none}
 #ta em,#ta i{font-style:italic}
 #italic{font-family:Georgia,serif;font-style:italic;color:var(--ink)}
 """

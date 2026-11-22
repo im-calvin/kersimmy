@@ -100,7 +100,7 @@ def generated_page(book, mode):
         page = re.sub(r'(?<!\.)\blocalStorage\b', 'readerStorage', page)
         page = page.replace("let smart=readerStorage.getItem(SKEY)!=='0';",'let smart=false;')
         page = re.sub(r'<button id="sq".*?</button>', '<button id="sq" hidden></button>',page,flags=re.S)
-        page = page.replace('<header>','<header><a href="/">← Library</a><a href="review">Review</a><button type="button" id="open-glossary">Glossary</button>')
+        page = page.replace('<header>','<header><a href="/">← Library</a><button type="button" id="open-glossary">Glossary</button>')
         page = page.replace('</head>', '<link rel="stylesheet" href="/glossary-poc.css"></head>')
         page = page.replace('onclick="fullProjectBackup()"','onclick="window.readerBackup()"')
         page = page.replace('<div class="cards" id="cards"></div>','<section id="artwork"><img id="project-gif" alt="Project GIF" hidden><div><button id="choose-gif">Choose GIF</button><button id="remove-gif">Remove GIF</button><input id="gif-file" type="file" accept=".gif,image/gif" hidden><p id="gif-status" role="status"></p></div></section><div class="cards" id="cards"></div>')
@@ -133,7 +133,7 @@ def generated_page(book, mode):
 <script type="module" src="/glossary-poc.js"></script>
 </body>''')
     else:
-        page = build_sync.render_page(cfg,book['chapters']).replace('localStorage','readerStorage')
+        page = re.sub(r'(?<!\.)\blocalStorage\b', 'readerStorage', build_sync.render_page(cfg,book['chapters']))
         page = page.replace('<header>','<header><a href="/">← Library</a><a href="draft">Draft</a>')
         page = page.replace('</script>\n</body>', "window.readerUseDrafts=(text)=>{english=parseEnglish(text,CH[0].no);save();renderEnglish()};window.readerHasUnsaved=()=>document.getElementById('editor').classList.contains('on');document.getElementById('editor').addEventListener('click',e=>{if(e.target.id==='editor')closeEditor()});</script>\n</body>")
     page = page.replace('<script src="corpus.js"></script>','')
@@ -143,7 +143,7 @@ def generated_page(book, mode):
     script = page[start+8:end]
     code = json.dumps(script, ensure_ascii=False).replace('<', '\\u003c')
     page = page[:start] + '<script src="/reader-storage.js"></script><script>window.readerStart(' + json.dumps({'id':book['id'],'mode':mode,'prefix':cfg['storage_prefix']}) + ',()=>{const script=document.createElement("script");script.textContent=' + code + ';document.body.append(script)});</script>' + page[end+9:]
-    extra = '''<style>[hidden]{display:none!important}header{height:auto;min-height:44px;flex-wrap:wrap;padding:8px 12px}header a{font:13px sans-serif;color:#6b6455;text-decoration:none;margin-right:12px}#wrap{flex:1;min-height:0;height:auto}body{display:flex;flex-direction:column}#find,#stats{position:fixed;inset:0;background:#28332365;padding:5vh 5vw;z-index:40}#find.on{display:flex}#find>.top,#find>#verdict,#find>#past,#find>#hits,#stats>.top,#stats>.body{background:#faf8f4;padding:12px 22px}#stats{width:100%;max-height:none;border:0;border-radius:0;box-shadow:none}#stats>.top,#stats>.body{width:min(760px,100%);margin:0 auto}#stats>.top{border-radius:12px 12px 0 0}#stats>.body{border-radius:0 0 12px 12px;padding-bottom:30px}#artwork{display:flex;flex-wrap:wrap;align-items:center;gap:24px;margin:0 0 22px}#project-gif{width:150px;height:150px;object-fit:contain}#reader-server-status{font:12px sans-serif;padding:6px 12px;background:#f1f2e9;color:#425b48}#reader-server-status.error{color:#a2392a;background:#fff0e8}</style>'''
+    extra = '''<style>[hidden]{display:none!important}header{height:auto;min-height:44px;flex-wrap:wrap;padding:8px 12px}header a{font:13px sans-serif;color:var(--heading);text-decoration:none;margin-right:12px}#wrap{flex:1;min-height:0;height:auto}body{display:flex;flex-direction:column}#find,#stats{position:fixed;inset:0;background:var(--scrim);padding:5vh 5vw;z-index:40}#find.on{display:flex}#find>.top,#find>#verdict,#find>#past,#find>#hits,#stats>.top,#stats>.body{background:var(--bg);padding:12px 22px}#stats{width:100%;max-height:none;border:0;border-radius:0;box-shadow:none}#stats>.top,#stats>.body{width:min(760px,100%);margin:0 auto}#stats>.top{border-radius:12px 12px 0 0}#stats>.body{border-radius:0 0 12px 12px;padding-bottom:30px}#artwork{display:flex;flex-wrap:wrap;align-items:center;gap:24px;margin:0 0 22px}#project-gif{width:150px;height:150px;object-fit:contain}#reader-server-status{font:12px sans-serif;padding:6px 12px;background:var(--status-bg);color:var(--status)}#reader-server-status.error{color:var(--error);background:var(--error-bg)}</style>'''
     return page.replace('</head>',extra+'</head>')
 
 

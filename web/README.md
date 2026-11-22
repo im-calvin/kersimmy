@@ -51,8 +51,12 @@ before each set of chapters; reopening the review editor emits this structure.
 
 The drafting interface is the original reader: source on the left, English on the
 right, paragraph synchronization, contextual term search, statistics, repeated
-words, and configurable words per page. Use I or Cmd/Ctrl+I for italics. Select a
-translation passage and choose the Add comment speech bubble beside the selection.
+words, and configurable words per page. The walkthrough opens on the first visit
+in each browser. Open it again from **View → Walkthrough**. Use I or Cmd/Ctrl+I
+for italics. Select a translation passage and choose the Add comment speech bubble
+beside the selection.
+Choose **Theme** in the library or review, or **View → Theme** in the draft.
+The setting follows the system by default and is saved in your browser.
 Click marked text to read or edit its note. If an edit detaches a comment,
 select its replacement passage and use the reattach button below the English
 pane. View contains the comment highlight color and Word comment author settings.
@@ -66,9 +70,8 @@ pages, and the SOURCE/YOUR TRANSLATION labels are absent.
 Stats includes Choose GIF and Remove GIF. The image is stored with the book and
 included in JSON exports. Choose an animated GIF up to 5 MB.
 
-Review opens the original `build_sync.py` interface. Paste English or use current
-drafts; review text remains separate. Chapter, proportional, and disabled scroll
-synchronization are the original implementations.
+Previously saved review text remains in project backups. The original
+`/books/<id>/review` address is available for existing bookmarks.
 
 Click outside statistics/search/review overlays to dismiss them. Escape and the
 original close buttons also work. The library/import form uses native dialogs.
@@ -122,7 +125,7 @@ with `python3 tools/build_web.py` after library/adapter changes. Docker rebuilds
 both. This library needs its Python service; standalone static hosting is no
 longer the active architecture.
 
-See [DEPLOYMENT.md](../DEPLOYMENT.md) for Docker, Portainer, backups and restoration.
+See [DEPLOYMENT.md](../DEPLOYMENT.md) for Docker, Arcane, backups and restoration.
 Run storage tests with:
 
 ```sh

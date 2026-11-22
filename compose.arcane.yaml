@@ -1,8 +1,6 @@
-# Load a locally built image on the Portainer Docker host or set READER_IMAGE.
-# Set CLOUDFLARED_NETWORK to an existing network shared with cloudflared.
 services:
   reader:
-    image: ${READER_IMAGE:-translation-reader:local}
+    image: ${READER_IMAGE:-ghcr.io/im-calvin/translate:latest}
     restart: unless-stopped
     environment:
       BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
@@ -17,9 +15,13 @@ services:
         aliases:
           - translation-reader
     stop_grace_period: 30s
+
 volumes:
   reader_data:
+    external: true
+    name: ${READER_DATA_VOLUME:-translation-reader_reader_data}
+
 networks:
   tunnel:
     external: true
-    name: ${CLOUDFLARED_NETWORK:?Set CLOUDFLARED_NETWORK to the existing cloudflared Docker network}
+    name: ${CLOUDFLARED_NETWORK:?Set CLOUDFLARED_NETWORK to the network shared with cloudflared}
