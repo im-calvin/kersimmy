@@ -170,10 +170,13 @@ Choose an update path:
   `ARCANE_WEBHOOK_URL` secret in the GitHub `production` environment and set
   `ARCANE_DEPLOY_ENABLED=true` as a repository Actions variable. The URL is a
   credential. GitHub-hosted runners need to reach its endpoint over HTTPS.
-  For a webhook protected by Cloudflare Access, save the service token's Client
-  ID as `CF_ACCESS_CLIENT_ID` and its Client Secret as `CF_ACCESS_CLIENT_SECRET`
-  in the same GitHub environment. Grant the token a Service Auth policy scoped
-  to the webhook path. Compose pulls the configured image on deploy.
+  Save the Cloudflare Access service token's Client ID as `CF_ACCESS_CLIENT_ID`
+  and its Client Secret as `CF_ACCESS_CLIENT_SECRET` in the same GitHub
+  environment. Grant the token a Service Auth policy scoped to the webhook path.
+  Actions runs `tools/test_arcane_webhook.sh` with those three secrets. Run the
+  same script locally to test with hidden prompts. On failure, use the printed
+  Cloudflare Ray ID, when available, to look up the request in Security Events.
+  Compose pulls the configured image on deploy.
   A successful request queues the job. Check Arcane's Event Log and the reader
   container's health for the result.
   [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
