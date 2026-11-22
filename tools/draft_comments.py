@@ -23,13 +23,10 @@ CSS = """
   font:15px/1.5 Georgia,serif;padding:.6rem;margin:.5rem 0}
 #comments-dialog blockquote{margin:.6rem 0;color:var(--heading);white-space:pre-wrap}
 #comments-dialog .comment{border-top:1px solid var(--line);padding:.7rem 0}
+/* Keep the highlight blue even where it blends with the gold reading highlight. */
 #comment-marks{position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:multiply;
-  --comment-fill:#edcfff;--comment-underline:#6d4294}
-#comment-marks[data-tone="purple"]{--comment-fill:#e4bfff}
-#comment-marks[data-tone="light-blue"]{--comment-fill:#cce5ff;--comment-underline:#38638d}
-:root[data-theme="dark"] #comment-marks{mix-blend-mode:screen;--comment-fill:#352044;--comment-underline:#c29cdb}
-:root[data-theme="dark"] #comment-marks[data-tone="purple"]{--comment-fill:#4a2465}
-:root[data-theme="dark"] #comment-marks[data-tone="light-blue"]{--comment-fill:#12344b;--comment-underline:#85badf}
+  --comment-fill:#bfd2ff;--comment-underline:#38638d}
+:root[data-theme="dark"] #comment-marks{mix-blend-mode:screen;--comment-fill:#123455;--comment-underline:#85badf}
 #comment-marks span{position:absolute;background:var(--comment-fill);border-bottom:2px solid var(--comment-underline)}
 #comments-dialog .comment p{white-space:pre-wrap;overflow-wrap:anywhere}
 #comment-message{font-size:13px;color:var(--heading)}
@@ -70,17 +67,6 @@ const commentSubmit=document.getElementById('save-comment');
 const commentAdd=document.getElementById('comment-add');
 const reattachButton=document.getElementById('reattach-comments');
 const commentMarks=document.getElementById('comment-marks');
-const commentTone=document.getElementById('comment-tone');
-const commentToneKey='translation-reader:comment-highlight';
-try{
-  const savedTone=window.localStorage.getItem(commentToneKey);
-  if([...commentTone.options].some(option=>option.value===savedTone))commentTone.value=savedTone;
-}catch{}
-commentMarks.dataset.tone=commentTone.value;
-commentTone.addEventListener('change',()=>{
-  commentMarks.dataset.tone=commentTone.value;
-  try{window.localStorage.setItem(commentToneKey,commentTone.value)}catch{}
-});
 function readComments(){try{return JSON.parse(localStorage.getItem(NKEY)||'{}')}catch{return{}}}
 function chapterComments(){return comments[cur]||[]}
 function attachedComments(){return chapterComments().filter(note=>!note.detached)}

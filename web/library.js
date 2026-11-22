@@ -1,8 +1,9 @@
-import './dialogs.js';
+import {dismissOnBackdrop} from './dialogs.js';
 import {previewManuscript, getBundle, setVolumes} from './db.js';
 const stripHeading = text => text.replace(/^\s*(?:Chapter|Ch\.?)\s+\d+[^\n]*\n/i, '').trim();
 import {listBooks, serverMode, migrateBrowserLibrary, backupServer, serverStatus, getBook, getState, importBooks, backupPayload, readBackup, download, filename, stamp} from './db.js';
 const $ = id => document.getElementById(id);
+document.querySelectorAll('dialog').forEach(dismissOnBackdrop);
 let preview = null, currentBook = null, parsingVersion = 0;
 const message = (text, error = false) => { $('message').textContent = text; $('message').className = error ? 'error' : ''; };
 function element(tag, text, className) {

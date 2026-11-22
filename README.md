@@ -1,4 +1,4 @@
-# Translation Reader
+# Kersimmy
 
 A Chinese-to-English manuscript workspace with a shared Docker library, a draft
 editor, and native Word comment export.
@@ -39,19 +39,14 @@ database files, and backups. [GitHub image publishing](https://docs.github.com/e
 1. Set up Arcane on the Docker host that will run the reader, or pick that host
    as an agent in an existing Arcane installation. [Arcane installation](https://getarcane.app/docs/get-started/installation)
 2. Create the reader data volume on that host with
-   `docker volume create translation-reader_reader_data`. If you have an existing
+   `docker volume create kersimmy`. If you have an existing
    reader on the host, use its existing volume name as `READER_DATA_VOLUME`.
-3. In **Projects → Create Project**, name it `translation-reader` and paste
-   [compose.arcane.yaml](compose.arcane.yaml). Add an `.env` file with the name of
-   the Docker network shared with cloudflared. For example:
-
-   ```dotenv
-   CLOUDFLARED_NETWORK=tunnel
-   ```
-
+3. In **Projects → Create Project**, name it `kersimmy` and paste
+   [compose.arcane.yaml](compose.arcane.yaml). The project publishes the reader
+   to `127.0.0.1:8888` on the Docker host.
 4. Save the project and click **Up**. Check that the reader container is healthy.
-   Route the Cloudflare tunnel to `http://translation-reader:8000`. See the
-   [production setup guide](DEPLOYMENT.md#production-arcane-and-cloudflare) for
+   Point host-installed cloudflared on the same machine at `http://127.0.0.1:8888`.
+   See the [production setup guide](DEPLOYMENT.md#production-arcane-and-cloudflare) for
    migration, Access configuration, and rollbacks. [Arcane project documentation](https://getarcane.app/docs/docker/projects)
 
 ### Automatic deployment

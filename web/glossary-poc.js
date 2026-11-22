@@ -1,4 +1,7 @@
+import {dismissOnBackdrop} from './dialogs.js';
+
 const dialog = document.getElementById('glossary-dialog');
+dismissOnBackdrop(dialog);
 const table = document.getElementById('glossary-terms');
 const status = document.getElementById('glossary-status');
 const add = document.getElementById('glossary-add');
@@ -131,6 +134,9 @@ source.addEventListener('focusout', event => {
 });
 source.addEventListener('scroll', hideGlossaryTooltip, {passive: true});
 window.addEventListener('resize', hideGlossaryTooltip);
+document.addEventListener('pointerdown', event => {
+  if (activeTerm && !activeTerm.contains(event.target)) hideGlossaryTooltip();
+}, {capture: true});
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') hideGlossaryTooltip();
 });

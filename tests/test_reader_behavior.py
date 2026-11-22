@@ -7,6 +7,13 @@ from playwright.sync_api import expect
 DRAFT = 'Chapter 1\n\nFirst paragraph.\nSecond paragraph.\nThird paragraph.'
 
 
+def open_exports(page):
+    menu = page.locator('#exports-menu')
+    if menu.get_attribute('open') is None:
+        menu.get_by_text('Exports', exact=True).click()
+    return menu
+
+
 def saved(reader):
     page = reader['page']
     if reader['mode'] == 'hosted':
@@ -19,23 +26,29 @@ def test_draft_theme_follows_system_and_remembers_an_override(reader):
     page = reader['page']
     root = page.locator('html')
     editor = page.get_by_role('textbox', name='Translation')
+    moon = page.get_by_role('button', name='Switch to dark mode', exact=True)
+    sun = page.get_by_role('button', name='Switch to light mode', exact=True)
+    view = page.locator('.reader-options summary')
+    page.emulate_media(color_scheme='light')
+    expect(moon).to_be_hidden()
+    view.click()
+    expect(moon).to_have_text('☾')
     page.emulate_media(color_scheme='dark')
     expect(root).to_have_css('color-scheme', 'dark')
     expect(editor).to_have_css('background-color', 'rgb(25, 24, 28)')
     expect(editor).to_have_css('color', 'rgb(232, 214, 184)')
-    page.locator('.reader-options summary').click()
-    theme = page.get_by_label('Theme', exact=True)
-    expect(theme).to_have_value('system')
-    theme.select_option('light')
+    expect(sun).to_have_text('☀\ufe0e')
+    sun.click()
     expect(root).to_have_css('color-scheme', 'light')
     page.reload()
     expect(root).to_have_css('color-scheme', 'light')
-    page.locator('.reader-options summary').click()
-    expect(theme).to_have_value('light')
-    theme.select_option('system')
+    view.click()
+    expect(moon).to_be_visible()
+    moon.press('Space')
     expect(root).to_have_css('color-scheme', 'dark')
     page.emulate_media(color_scheme='light')
-    expect(root).to_have_css('color-scheme', 'light')
+    expect(root).to_have_css('color-scheme', 'dark')
+    expect(sun).to_be_visible()
 
 
 def test_theme_is_shared_by_hosted_library_draft_and_review(page, reader_environment):
@@ -48,37 +61,43 @@ def test_theme_is_shared_by_hosted_library_draft_and_review(page, reader_environ
     page.emulate_media(color_scheme='light')
     page.goto(base)
     root = page.locator('html')
-    theme = page.get_by_label('Theme', exact=True)
-    theme.select_option('dark')
+    moon = page.get_by_role('button', name='Switch to dark mode', exact=True)
+    sun = page.get_by_role('button', name='Switch to light mode', exact=True)
+    moon.click()
     expect(root).to_have_css('background-color', 'rgb(32, 31, 34)')
     expect(root).to_have_css('color', 'rgb(232, 214, 184)')
     page.goto(f'{base}/books/{book_id}/draft')
     expect(root).to_have_css('color-scheme', 'dark')
+    expect(sun).to_be_hidden()
+    page.locator('.reader-options summary').click()
+    expect(sun).to_be_visible()
     page.get_by_role('button', name='Glossary', exact=True).click()
     glossary = page.get_by_role('dialog', name='Glossary')
     expect(glossary).to_have_css('background-color', 'rgb(32, 31, 34)')
     glossary.get_by_role('button', name='Close').click()
     expect(page.get_by_role('link', name='Review', exact=True)).to_have_count(0)
     page.goto(f'{base}/books/{book_id}/review')
-    expect(theme).to_have_value('dark')
+    expect(sun).to_be_visible()
     page.get_by_role('button', name='paste English', exact=True).click()
     expect(page.locator('#editor')).to_have_css('background-color', 'rgb(25, 24, 28)')
     expect(page.get_by_role('textbox')).to_have_css('color', 'rgb(232, 214, 184)')
     page.get_by_role('button', name='cancel', exact=True).click()
-    theme.select_option('light')
+    sun.click()
     expect(root).to_have_css('color-scheme', 'light')
     page.get_by_role('link', name='Library').click()
-    expect(theme).to_have_value('light')
+    expect(moon).to_be_visible()
 
 
-def test_draft_walkthrough_can_be_skipped_and_reopened(reader):
+def test_draft_walkthrough_spotlights_each_step_and_can_be_reopened(reader):
     page = reader['page']
     walkthrough = page.get_by_role('complementary', name='Draft walkthrough')
-    expect(walkthrough.get_by_role('heading', name='Start your draft')).to_be_visible()
+    spotlight = page.locator('#draft-help-spotlight')
+    expect(walkthrough.get_by_role('heading', name='Choose a chapter')).to_be_visible()
+    expect(spotlight).not_to_have_css('box-shadow', 'none')
     walkthrough.get_by_role('button', name='Next').click()
-    expect(walkthrough).to_contain_text('Shift-click the last')
+    expect(walkthrough.get_by_role('heading', name='Write your translation')).to_be_visible()
     walkthrough.get_by_role('button', name='Back').click()
-    expect(walkthrough.get_by_role('heading', name='Start your draft')).to_be_visible()
+    expect(walkthrough.get_by_role('heading', name='Choose a chapter')).to_be_visible()
     walkthrough.get_by_role('button', name='Skip').click()
     expect(walkthrough).to_be_hidden()
 
@@ -88,10 +107,23 @@ def test_draft_walkthrough_can_be_skipped_and_reopened(reader):
     expect(walkthrough).to_be_hidden()
     page.locator('.reader-options summary').click()
     page.get_by_role('button', name='Walkthrough', exact=True).click()
-    expect(walkthrough.get_by_role('heading', name='Start your draft')).to_be_visible()
-    for _ in range(2):
-        walkthrough.get_by_role('button', name='Next').click()
-    expect(walkthrough.get_by_role('heading', name='Comment and export')).to_be_visible()
+    page.set_viewport_size({'width': 410, 'height': 720})
+    steps = [
+        ('Choose a chapter', '#sel'),
+        ('Write your translation', '#ta'),
+        ('Use italics', '#italic'),
+        ('Link Chinese and English', '#sy'),
+        ('Leave a comment', '#draft-help-comment-preview'),
+        ('Export to Word', '#exports-trigger'),
+    ]
+    for index, (heading, target) in enumerate(steps):
+        expect(walkthrough.get_by_role('heading')).to_have_text(heading)
+        target_box = page.locator(target).bounding_box()
+        spot_box = spotlight.bounding_box()
+        assert spot_box['x'] <= target_box['x'] < spot_box['x'] + spot_box['width'] <= 410
+        assert spot_box['y'] <= target_box['y'] < spot_box['y'] + spot_box['height'] <= 720
+        if index < len(steps) - 1:
+            walkthrough.get_by_role('button', name='Next').click()
     walkthrough.get_by_role('button', name='Start translating').click()
     expect(walkthrough).to_be_hidden()
     expect(page.get_by_role('textbox', name='Translation')).to_be_focused()
@@ -136,7 +168,7 @@ def test_search_statistics_and_dismissal(reader):
     expect(page.locator('#stats')).not_to_have_class('on')
     page.get_by_role('button', name='find', exact=True).click()
     page.locator('#q').fill('月光')
-    expect(page.locator('#verdict')).to_contain_text('Appears')
+    expect(page.locator('#verdict')).to_have_text('Found in 3 source paragraphs across 2 chapters.')
     expect(page.locator('#hits')).to_contain_text('后来')
     dismiss(reader, '#find')
     expect(page.locator('#find')).not_to_have_class('on')
@@ -144,20 +176,35 @@ def test_search_statistics_and_dismissal(reader):
 
 def test_exports_preserve_source_and_draft(reader):
     page = reader['page']
+    page.set_viewport_size({'width': 410, 'height': 720})
+    page.emulate_media(color_scheme='dark')
     page.locator('#ta').fill(DRAFT)
     saved(reader)
+    expect(page.get_by_role('button', name='Word', exact=True)).to_be_hidden()
+    expect(page.get_by_role('button', name='Download recovery backup')).to_be_hidden()
+    menu = open_exports(page)
+    panel = menu.locator(':scope > div')
+    expect(panel).to_have_css('background-color', 'rgb(32, 31, 34)')
+    bounds = panel.bounding_box()
+    assert 0 <= bounds['x'] < bounds['x'] + bounds['width'] <= 410
+    assert 0 <= bounds['y'] < bounds['y'] + bounds['height'] <= 720
+    expect(menu.get_by_label('Word comment author')).to_be_visible()
+    expect(menu.get_by_role('button', name='Copy for Google Docs')).to_be_visible()
     with page.expect_download() as event:
-        page.get_by_role('button', name='backup', exact=True).click()
+        menu.get_by_role('button', name='Draft text backup', exact=True).click()
     text = Path(event.value.path()).read_text(encoding='utf-8')
     assert text.count('Chapter 1') == 1
     assert 'Third paragraph.' in text
     with page.expect_download() as event:
-        page.get_by_role('button', name='full project backup', exact=True).click()
+        menu.get_by_role('button', name='Full project backup', exact=True).click()
     payload = json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
     assert payload['version'] == 1
     entry = payload['books'][0]
     assert entry['state']['drafts']['1'] == DRAFT
     assert entry['book']['chapters'][1]['paras'][0] == '后来月光'
+    page.keyboard.press('Escape')
+    expect(menu.get_by_role('button', name='Word', exact=True)).to_be_hidden()
+    expect(page.locator('#exports-trigger')).to_be_focused()
 
 
 def test_review_text_is_separate_and_persistent(reader):

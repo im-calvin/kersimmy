@@ -3,13 +3,7 @@
 from pathlib import Path
 
 SCRIPT = (Path(__file__).resolve().parent.parent / 'web' / 'theme.js').read_text(encoding='utf-8')
-CONTROL = '''<label class="reader-theme">Theme
-  <select data-theme-setting aria-label="Theme">
-    <option value="system">System</option>
-    <option value="light">Light</option>
-    <option value="dark">Dark</option>
-  </select>
-</label>'''
+CONTROL = '<button type="button" class="theme-toggle" aria-label="Switch theme">☾</button>'
 
 CSS = """
 :root{color-scheme:light;--ink:#1b1a17;--dim:#a8a29a;--bg:#faf8f4;--line:#eae5dc;
@@ -25,5 +19,5 @@ CSS = """
   --error:#ffa49b;--error-bg:#402628;--status:#abd0b6;--status-bg:#242f29;
   --scrim:#08070bb3;--glossary:#f28782;--comment-link:#ccaae9}
 a{color:var(--heading)}
-.reader-theme{color:var(--heading);white-space:nowrap}
+button.theme-toggle{color:var(--heading);font-size:20px;line-height:1;width:32px;height:32px;padding:0}
 """

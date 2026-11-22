@@ -180,7 +180,7 @@ export function backupPayload(entries) {
 }
 export function readBackup(text) {
   const data = JSON.parse(text);
-  if (data.format !== 'translation-reader' || data.version !== 1 || !Array.isArray(data.books)) throw new Error('This is not a supported Translation Reader JSON backup.');
+  if (data.format !== 'translation-reader' || data.version !== 1 || !Array.isArray(data.books)) throw new Error('This is not a supported Kersimmy JSON backup.');
   return data.books;
 }
 export function download(name, contents, type = 'application/json') {

@@ -47,7 +47,7 @@ empty library, ready for a manuscript or a full-project backup.
   the same interval. These include comments, offsets and italic ranges for
   Restore backup. Set `PORTABLE_JSON_SNAPSHOTS=0` when starting Compose to
   disable the extra files. The file reader can also write snapshots while its tab is
-  open. In a supported browser, use View → Choose snapshot folder and set the
+  open. In a supported browser, use Exports → Choose snapshot folder and set the
   interval. Choose the folder again after reopening the file reader.
 
 Snapshots in the same volume protect against editing mistakes, not host/disk
@@ -99,40 +99,36 @@ directory, then run `tests/original_reader_test.py`. See web/README.md.
 
 Arcane manages the reader as a Docker Compose project. The project file
 [compose.arcane.yaml](compose.arcane.yaml) pulls
-`ghcr.io/im-calvin/translate:latest`, attaches it to the cloudflared network,
-and mounts an external Docker volume at `/data`.
+`ghcr.io/im-calvin/translate:latest`, runs the reader on port 8888 inside the
+container, publishes it at `127.0.0.1:8888` by default, and mounts an external
+Docker volume at `/data`.
 
 1. Install Arcane with its [Docker Compose instructions](https://getarcane.app/docs/get-started/installation)
-   if it is new to the host. Open its dashboard, select the Docker agent that
-   runs cloudflared, and find the connector's user-defined network in the
-   container details. On the Docker host, the equivalent query is:
+   if it is new to the host. In Arcane, select the Docker agent on the same
+   machine as the host-installed cloudflared service.
 
-   ```sh
-   docker inspect cloudflared --format '{{range $name, $network := .NetworkSettings.Networks}}{{println $name}}{{end}}'
-   ```
-
-2. For a fresh library, run `docker volume create translation-reader_reader_data`
+2. For a fresh library, run `docker volume create kersimmy`
    on the Docker host. For a migration on the same Docker host, find the old
    reader's named volume mounted at `/data` and set `READER_DATA_VOLUME` to that
-   name. Back up the library and stop the old reader before starting the new
-   project against its volume. To migrate across hosts, deploy with a fresh
-   volume and restore a full-library JSON backup in the new reader.
+   name. Set `READER_DATA_VOLUME=translation-reader_reader_data` if that is the
+   volume used by your existing project. Back up the library and stop the old
+   reader before starting the new project against its volume. To migrate across
+   hosts, deploy with a fresh volume and restore a full-library JSON backup.
 3. In Arcane, open **Projects → Create Project** and name it
-   `translation-reader`. Paste the YAML from [compose.arcane.yaml](compose.arcane.yaml).
-   Under **Add .env file**, set `CLOUDFLARED_NETWORK` to the connector network.
-   Add `READER_DATA_VOLUME` if using a different volume and `READER_IMAGE` if
+   `kersimmy`. Paste the YAML from [compose.arcane.yaml](compose.arcane.yaml).
+   For Git Pull sync, use `kersimmy` as the sync name.
+   For an existing project, update its Compose file and remove the old
+   `CLOUDFLARED_NETWORK` setting. Set `READER_HOST_PORT` if port 8888 is occupied,
+   `READER_DATA_VOLUME` if using a different volume, or `READER_IMAGE` if
    pinning a specific release. Save and click **Up**. The named volume is
    external to this Compose project and persists across redeployments.
    [Arcane project documentation](https://getarcane.app/docs/docker/projects)
 4. Protect `translate.bxian03.com` with Cloudflare Access and set the existing
-   tunnel origin to `http://translation-reader:8000`. Keep the default HTTP
-   Host header. Confirm the reader container reports healthy, the library
-   opens, and the hostname requires Access sign-in.
-   [Cloudflare tunnel routing](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/)
-
-If cloudflared runs on the host, you can instead remove the Compose network
-entries and add `ports: ["127.0.0.1:8000:8000"]` under the reader service.
-Set the tunnel origin to `http://127.0.0.1:8000`.
+   tunnel origin to `http://127.0.0.1:8888`, using the same port as
+   `READER_HOST_PORT` if overridden. Keep the default HTTP Host header.
+   Run `curl -fsS http://127.0.0.1:8888/api/status` on the Docker host, then
+   confirm the public hostname requires Access sign-in and opens the library.
+   [Cloudflare tunnel routing](https://developers.cloudflare.com/tunnel/concepts/routing/)
 
 ### Updates and rollback
 

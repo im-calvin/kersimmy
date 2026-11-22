@@ -10,10 +10,16 @@
   }
 
   let preference = readTheme();
+  const root = document.documentElement;
   function applyTheme() {
-    document.documentElement.dataset.theme = preference === 'system'
-      ? (system.matches ? 'dark' : 'light') : preference;
-    for (const control of document.querySelectorAll('[data-theme-setting]')) control.value = preference;
+    const dark = preference === 'system' ? system.matches : preference === 'dark';
+    root.dataset.theme = dark ? 'dark' : 'light';
+    const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    for (const button of document.querySelectorAll('.theme-toggle')) {
+      button.textContent = dark ? '☀\uFE0E' : '☾';
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
   }
 
   applyTheme();
@@ -24,9 +30,9 @@
     preference = readTheme();
     applyTheme();
   });
-  document.addEventListener('change', event => {
-    if (!event.target.matches('[data-theme-setting]')) return;
-    preference = event.target.value;
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.theme-toggle')) return;
+    preference = root.dataset.theme === 'dark' ? 'light' : 'dark';
     try { window.localStorage.setItem(key, preference); } catch {}
     applyTheme();
   });

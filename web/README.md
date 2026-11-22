@@ -52,19 +52,22 @@ before each set of chapters; reopening the review editor emits this structure.
 The drafting interface is the original reader: source on the left, English on the
 right, paragraph synchronization, contextual term search, statistics, repeated
 words, and configurable words per page. The walkthrough opens on the first visit
-in each browser. Open it again from **View → Walkthrough**. Use I or Cmd/Ctrl+I
+in each browser and highlights each control in turn. Open it again from
+**View → Walkthrough**. Use I or Cmd/Ctrl+I
 for italics. Select a translation passage and choose the Add comment speech bubble
 beside the selection.
-Choose **Theme** in the library or review, or **View → Theme** in the draft.
-The setting follows the system by default and is saved in your browser.
-Click marked text to read or edit its note. If an edit detaches a comment,
+Use the sun or moon icon under **View** in the draft, or in the library or review
+toolbar, to switch themes. The reader follows your system theme until you choose
+a theme, then remembers it in your browser.
+Click blue-highlighted text to read or edit its note. If an edit detaches a comment,
 select its replacement passage and use the reattach button below the English
-pane. View contains the comment highlight color and Word comment author settings.
-Word exports a DOCX with italic
-runs and native Word comments. The find panel offers Source/Translation and
-Future chapters/Whole book. Whole book shows earlier and current passages too;
-Show more exposes results beyond the first 40. Search is literal and case-sensitive;
-counts refer to matching paragraphs. Smart quotes remain disabled in hosted
+pane. Under **Exports**, set the Word comment author, download a DOCX with
+italics and native Word comments, or copy the current chapter for Google Docs.
+Find searches the whole book. Queries containing
+Chinese characters look in the source first, and other queries start in the
+translation. Find tries the other side if there are no matches. Show more
+exposes results beyond the first 40. Search is literal and case-sensitive,
+and counts refer to matching paragraphs. Smart quotes remain disabled in hosted
 pages, and the SOURCE/YOUR TRANSLATION labels are absent.
 
 Stats includes Choose GIF and Remove GIF. The image is stored with the book and
@@ -81,8 +84,9 @@ original close buttons also work. The library/import form uses native dialogs.
 Wait for Synced to server before closing. Pending changes retain a local recovery
 copy and retry after connection interruptions. Clean pages refresh when another
 device saves; conflicting edits stop with a recovery message rather than silently
-replacing drafts. Download recovery backup preserves source, drafts, review text,
-settings, and GIF in the compatible JSON format.
+replacing drafts. If saving fails, **Download recovery backup** is available
+beside the sync status. It preserves source, drafts, review text, settings,
+and GIF in the compatible JSON format.
 
 Existing SQLite data and web-library JSON backups remain supported. Book links
 from the old web reader redirect to the original generated reader. Import browser
@@ -90,17 +94,17 @@ library copies an older IndexedDB library at the same browser origin/profile;
 for another address, export JSON there and use Restore backup here. Browser
 copies are retained. Repeating migration creates new independent copies.
 
-The library Back up library and book Backup buttons export full JSON. The
-original editor's backup button exports English text; full project backup exports
-its original full-project format. Import drafts accepts Chapter N text backups.
-Use Download recovery backup for the complete server record.
+The library Back up library and book Backup buttons export full JSON. In the
+draft's **Exports** menu, **Draft text backup** exports English text and
+**Full project backup** exports a project JSON. **Import drafts** accepts
+Chapter N text backups.
 
 ## Original file-based reader
 
 The prebuilt file reader is archived. To use it again, restore its files to
 their original paths and open `draft.html` in Chrome.
 Its localStorage and existing drafts are unchanged. To move local drafts and
-settings to the hosted library, use full project backup there, then Restore backup
+settings to the hosted library, use **Exports → Full project backup**, then Restore backup
 in the library. The file-based reader's generator workflow remains available. Optional volume
 parsing uses `volume_heading_regex` in an alternate config;
 `tools/chapter_structure.py` defines the built-in heading expression. If enabling

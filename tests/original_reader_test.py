@@ -43,7 +43,8 @@ with sync_playwright() as playwright:
         expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
         page.locator('#ta').evaluate("el=>{el.setSelectionRange(el.value.length,el.value.length);el.dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowRight'}))}")
         expect(page.locator('#cn p.hit')).to_have_attribute('id','c1p3')
-        with page.expect_download() as event:page.get_by_role('button',name='backup',exact=True).click()
+        page.locator('#exports-trigger').click()
+        with page.expect_download() as event:page.get_by_role('button',name='Draft text backup',exact=True).click()
         assert Path(event.value.path()).read_text().count('Chapter 1')==1
         page.reload()
         expect(page.locator('#ta')).to_have_js_property('value', 'Chapter 1\n\nFirst paragraph.\nSecond paragraph.\nThird paragraph.')
@@ -59,7 +60,7 @@ with sync_playwright() as playwright:
         expect(page.locator('#stats')).not_to_have_class('on')
         page.get_by_role('button',name='find',exact=True).click()
         page.locator('#q').fill('月光')
-        expect(page.locator('#verdict')).to_contain_text('Appears')
+        expect(page.locator('#verdict')).to_contain_text('source paragraph')
         page.mouse.click(2,2)
         expect(page.locator('#find')).not_to_have_class('on')
         print('PASS: original statistics, GIF customization, contextual search, click-outside dismissal',flush=True)
@@ -97,7 +98,8 @@ with sync_playwright() as playwright:
         }''')
         assert result==409
         print('PASS: separate-browser sync, offline recovery/retry, stale-write conflict rejection',flush=True)
-        with page.expect_download() as event:page.get_by_role('button',name='Download recovery backup').click()
+        page.locator('#exports-trigger').click()
+        with page.expect_download() as event:page.get_by_role('button',name='Full project backup',exact=True).click()
         payload=json.loads(Path(event.value.path()).read_text())
         state=payload['books'][0]['state']
         assert state['drafts']['1']=='Pending offline text.'

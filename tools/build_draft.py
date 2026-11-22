@@ -4,7 +4,7 @@ Build the drafting surface: Chinese source (left) | minimal editor with italics 
 
 One chapter at a time. The editor autosaves per chapter to localStorage, but
 localStorage is treated as scratch, not as the archive — the durable store is
-Google Docs, reached with one click via "copy for Docs".
+Google Docs, reached via Exports → Copy for Google Docs.
 
 Scroll sync works on PARAGRAPH INDEX, not proportion: your Nth English paragraph
 maps to the Nth Chinese paragraph, which is valid from the first line onward
@@ -48,6 +48,11 @@ button:hover{color:var(--ink);background:var(--hover)}
 button[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft)}
 button.act{border:1px solid var(--line);background:var(--control)}
 #wrap{display:flex;height:calc(100% - 44px)}
+@media(max-width:750px){
+  body{display:flex;flex-direction:column}
+  header{height:auto;min-height:44px;flex-wrap:wrap;padding:.45rem .9rem}
+  #wrap{flex:1;min-height:0;height:auto}
+}
 #cn{flex:1;overflow-y:auto;padding:1.7rem 1.7rem 50vh;border-right:1px solid var(--line);
   font-family:"Songti SC","Noto Serif CJK SC","Source Han Serif SC",serif}
 #cn h2{font-size:calc(var(--fs) * .95);font-weight:600;margin:0 0 1.3rem;color:var(--heading)}
@@ -59,14 +64,29 @@ button.act{border:1px solid var(--line);background:var(--control)}
 #alignment-dialog table{width:100%;border-collapse:collapse;table-layout:fixed}
 #alignment-dialog th,#alignment-dialog td{text-align:left;vertical-align:top;padding:.5rem;border-bottom:1px solid var(--line);overflow-wrap:anywhere;white-space:pre-wrap}
 #alignment-dialog th:first-child{width:4rem}
-.reader-options summary{cursor:pointer}
-.reader-options div{position:absolute;right:1rem;z-index:35;background:var(--bg);border:1px solid var(--line);padding:.4rem}
+.reader-menu summary{cursor:pointer}
+.reader-menu>div{position:absolute;right:1rem;z-index:35;background:var(--bg);border:1px solid var(--line);padding:.4rem}
+.exports-menu>div{display:grid;gap:.45rem;width:min(17rem,calc(100vw - 2rem));
+  max-height:65vh;overflow:auto;padding:.65rem}
+.exports-menu button{text-align:left;color:var(--ink)}
+.exports-menu label{display:grid;gap:.25rem;color:var(--heading)}
+.exports-menu input{width:100%;font:inherit;color:var(--ink);background:var(--control);
+  border:1px solid var(--line);border-radius:4px;padding:.3rem .4rem}
+#snapshot-options:not([hidden]){display:grid;gap:.35rem;border-top:1px solid var(--line);padding-top:.45rem}
+#snapshot-status{margin:0;color:var(--heading)}
+#snapshot-status:empty{display:none}
 #pane{position:relative;flex:1;display:flex;flex-direction:column;min-width:0}
-#draft-help{position:absolute;top:.75rem;right:.75rem;z-index:25;
-  width:min(24rem,calc(100vw - 1.5rem));max-height:calc(100% - 4rem);overflow:auto;
+#draft-help{position:fixed;inset:0;z-index:42;pointer-events:none;overflow:hidden}
+#draft-help-spotlight{position:absolute;border-radius:6px;outline:2px solid #a9d4ff;
+  box-shadow:0 0 0 200vmax rgb(12 14 19 / .72)}
+#draft-help-card{position:absolute;pointer-events:auto;
+  width:min(24rem,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;
   padding:1rem;border:1px solid var(--line);border-radius:.5rem;
   background:var(--bg);color:var(--ink);box-shadow:0 6px 20px #29241e20;
   font-size:14px;line-height:1.45}
+#draft-help-comment-preview{position:absolute;width:32px;height:32px;display:grid;place-items:center;
+  border:1px solid var(--line);border-radius:4px;background:var(--control);color:var(--ink)}
+#draft-help-comment-preview[hidden]{display:none}
 #draft-help h2{margin:0;font-size:17px}
 #draft-help p{margin:.5rem 0 1rem}
 #draft-help .actions{display:flex;align-items:center;justify-content:flex-end;gap:.5rem}
@@ -94,7 +114,6 @@ button.act{border:1px solid var(--line);background:var(--control)}
 #verdict{font-size:15px;font-weight:600;color:var(--ink);padding:.2rem 0 .1rem}
 #verdict.none{color:var(--status)}
 #verdict.recur{color:var(--accent)}
-#past{font-size:12.5px;color:var(--dim);padding-bottom:.7rem}
 #hits{flex:1;overflow-y:auto;border-top:1px solid var(--line);padding-top:.6rem}
 #hits .h{display:flex;gap:.8rem;padding:.4rem 0;border-bottom:1px solid var(--line)}
 #hits .ref{flex:0 0 5.6rem;font-size:11.5px;color:var(--dim);
@@ -666,64 +685,39 @@ function openFind(){
 function closeFind(){
   document.getElementById('find').classList.remove('on'); ta.focus();
 }
-function chList(ns,cap){
-  const a=ns.slice(0,cap).map(chapterReference).join('、');
-  return ns.length>cap? a+'…' : a;
+function findMatches(corpus,query,translation){
+  const results=[];
+  for(const [no,,source] of corpus){
+    const paragraphs=translation?stripHead(store[no]||'').split('\n').filter(p=>p.trim()):source;
+    for(let i=0;i<paragraphs.length;i++){
+      if(paragraphs[i].includes(query))results.push([no,i+1,paragraphs[i]]);
+    }
+  }
+  return results;
 }
 let findLimit=40;
 function runFind(more=false){
   if(more!==true)findLimit=40;
   else findLimit+=40;
   const q=document.getElementById('q').value.trim();
-  const V=document.getElementById('verdict'), P=document.getElementById('past'),
-        R=document.getElementById('hits');
-  V.className=''; P.textContent=''; R.innerHTML='';
+  const V=document.getElementById('verdict'), R=document.getElementById('hits');
+  V.className=''; R.innerHTML='';
   if(!q){V.textContent=''; return}
   const C=window.CORPUS;
   if(!C){V.textContent='corpus.js not loaded — keep it beside this file.'; return}
-  const whole=document.getElementById('search-scope').value==='book';
-  const translation=document.getElementById('search-text').value==='translation';
-  const rows=translation?C.map(r=>[r[0],r[1],stripHead(store[r[0]]||'').split('\n').filter(p=>p.trim())]):C;
-  let earlier=0, earlierCh=[], here=0, future=[], futureCh=[], all=[], allCh=[];
-  for(const row of rows){
-    const no=row[0], paras=row[2];
-    let n=0;
-    for(let i=0;i<paras.length;i++){
-      if(paras[i].indexOf(q)<0)continue;
-      n++;all.push([no,i+1,paras[i]]);
-      if(no>cur)future.push([no,i+1,paras[i]]);
-    }
-    if(!n)continue;
-    allCh.push(no);
-    if(no<cur){earlier+=n; earlierCh.push(no)}
-    else if(no===cur){here+=n}
-    else futureCh.push(no);
+  let translation=!/\p{Script=Han}/u.test(q);
+  let results=findMatches(C,q,translation);
+  if(!results.length){
+    translation=!translation;
+    results=findMatches(C,q,translation);
   }
-  if(!future.length){
-    V.className='none';
-    V.textContent = (earlier+here)===0
-      ? 'Not found anywhere in the manuscript.'
-      : 'Never appears again — handle it however reads best here.';
-  }else{
-    V.className='recur';
-    const span=futureCh.length>1
-      ? chapterReference(futureCh[0])+' – '+chapterReference(futureCh[futureCh.length-1])
-      : chapterReference(futureCh[0]);
-    V.textContent='Appears '+future.length+(future.length===1?' more time':' more times')
-      +' across '+futureCh.length+(futureCh.length===1?' chapter':' chapters')
-      +', '+span+'.';
-  }
-  const bits=[];
-  if(here)bits.push(here+(here===1?' time':' times')+' elsewhere in this chapter');
-  if(earlier)bits.push(earlier+(earlier===1?' time':' times')+' earlier ('
-    +chList(earlierCh,6)+') — check the sheet');
-  P.textContent=bits.join('  ·  ');
-  if(whole){
-    V.className=all.length?'recur':'none';
-    V.textContent=all.length?'Found in '+all.length+(all.length===1?' paragraph':' paragraphs')+' across '+allCh.length+(allCh.length===1?' chapter.':' chapters.'):'Not found anywhere in '+(translation?'your translation.':'the manuscript.');
-    P.textContent='';
-  }
-  const results=whole?all:future, CAP=findLimit;
+  const count=results.length;
+  const chapters=new Set(results.map(hit=>hit[0])).size;
+  const side=translation?'translation':'source';
+  V.className=count?'recur':'none';
+  V.textContent=count?'Found in '+count+' '+side+(count===1?' paragraph':' paragraphs')
+    +' across '+chapters+(chapters===1?' chapter.':' chapters.'):'No matches in the source or translation.';
+  const CAP=findLimit;
   R.innerHTML=results.slice(0,CAP).map(h=>
     '<div class="h"><div class="ref">'+esc(chapterReference(h[0]))+' &para;'+h[1]+'</div>'
     +'<div class="tx">'+esc(h[2])+'</div></div>').join('')
@@ -848,7 +842,9 @@ function copyDocs(){
   document.addEventListener('copy',copy);
   let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
   finally{document.removeEventListener('copy',copy)}
-  document.body.removeChild(tmp); ta.focus();ta.setSelectionRange(...selection);
+  document.body.removeChild(tmp);
+  document.getElementById('exports-menu').open=false;
+  ta.focus();ta.setSelectionRange(...selection);
   backup();   /* snapshot every time a chapter goes out to Docs */
   ind.textContent=ok?'copied ch '+cur+' — paste into Docs (backup saved)'
                    :'copy failed';
@@ -974,19 +970,49 @@ function fs(d){
   paintCommentHighlights();
 }
 const viewMenu=document.querySelector('.reader-options');
+const readerMenus=document.querySelectorAll('.reader-menu');
 document.addEventListener('click',event=>{
-  if(viewMenu.open&&!viewMenu.contains(event.target))viewMenu.open=false;
+  for(const menu of readerMenus){
+    if(menu.open&&!menu.contains(event.target))menu.open=false;
+  }
 });
 const draftHelp=document.getElementById('draft-help');
+const helpSpotlight=document.getElementById('draft-help-spotlight');
+const helpCard=document.getElementById('draft-help-card');
+const helpCommentPreview=document.getElementById('draft-help-comment-preview');
 const helpSteps=[...draftHelp.querySelectorAll('section')];
 const helpBack=document.getElementById('draft-help-back');
 const helpNext=document.getElementById('draft-help-next');
 const helpKey='translation-reader:draft-help-v1';
 let helpStep=0;
+function positionDraftHelp(){
+  if(draftHelp.hidden)return;
+  const target=document.querySelector(helpSteps[helpStep].dataset.target);
+  helpCommentPreview.hidden=target!==helpCommentPreview;
+  if(!helpCommentPreview.hidden){
+    const editor=ta.getBoundingClientRect();
+    helpCommentPreview.style.left=(Math.min(editor.right,innerWidth)-48)+'px';
+    helpCommentPreview.style.top=(editor.top+16)+'px';
+  }
+  const bounds=target.getBoundingClientRect();
+  const edge=12, gap=16, padding=5;
+  const left=Math.max(0,bounds.left-padding);
+  const top=Math.max(0,bounds.top-padding);
+  const right=Math.min(innerWidth,target===ta?Math.min(bounds.right,bounds.left+360):bounds.right+padding);
+  const bottom=Math.min(innerHeight,target===ta?Math.min(bounds.bottom,bounds.top+104):bounds.bottom+padding);
+  Object.assign(helpSpotlight.style,{left:left+'px',top:top+'px',
+    width:Math.max(0,right-left)+'px',height:Math.max(0,bottom-top)+'px'});
+  const x=Math.max(edge,Math.min(left,innerWidth-helpCard.offsetWidth-edge));
+  const height=helpCard.offsetHeight;
+  const below=bottom+gap, above=top-gap-height;
+  const y=below+height<=innerHeight-edge?below:above>=edge?above:innerHeight-height-edge;
+  Object.assign(helpCard.style,{left:x+'px',top:Math.max(edge,y)+'px'});
+}
 function showDraftHelpStep(){
   helpSteps.forEach((step,index)=>step.hidden=index!==helpStep);
   helpBack.hidden=helpStep===0;
   helpNext.textContent=helpStep===helpSteps.length-1?'Start translating':'Next';
+  positionDraftHelp();
 }
 function closeDraftHelp(focusEditor=false){
   if(draftHelp.hidden)return;
@@ -997,8 +1023,8 @@ function closeDraftHelp(focusEditor=false){
 document.getElementById('open-draft-help').addEventListener('click',()=>{
   viewMenu.open=false;
   helpStep=0;
-  showDraftHelpStep();
   draftHelp.hidden=false;
+  showDraftHelpStep();
   helpNext.focus();
 });
 helpBack.addEventListener('click',()=>{
@@ -1016,10 +1042,16 @@ document.addEventListener('pointerdown',event=>{
   if(!draftHelp.contains(event.target))closeDraftHelp();
 });
 ta.addEventListener('focus',()=>closeDraftHelp());
+const helpLayout=new ResizeObserver(positionDraftHelp);
+helpLayout.observe(draftHelp);
+helpLayout.observe(ta);
 addEventListener('keydown',e=>{
   if(e.target.closest('dialog'))return;
   if(e.key==='Escape'&&!draftHelp.hidden){e.preventDefault();closeDraftHelp(true);return}
-  if(e.key==='Escape'&&viewMenu.open){viewMenu.open=false;viewMenu.querySelector('summary').focus();return}
+  if(e.key==='Escape'){
+    const menu=document.querySelector('.reader-menu[open]');
+    if(menu){menu.open=false;menu.querySelector('summary').focus();return}
+  }
   if((e.metaKey||e.ctrlKey)&&e.key==='s'){e.preventDefault();commit();return}
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();copyDocs();return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='f'){
@@ -1039,6 +1071,7 @@ addEventListener('keydown',e=>{
   if(!chap(cur))cur=CH[0].no;
   load(cur); sizeCheck();
   try{draftHelp.hidden=window.localStorage.getItem(helpKey)==='1'}catch{draftHelp.hidden=false}
+  showDraftHelpStep();
 })();
 """
 
@@ -1061,7 +1094,7 @@ PAGE = """<!DOCTYPE html>
   <button id="sy" onclick="toggleSync()"
     title="Click Chinese text to read its translation. Option/Alt-click to set alignment or Shift-click to extend the range.">
     sync</button>
-  <details class="reader-options"><summary>View</summary><div>
+  <details class="reader-menu reader-options"><summary>View</summary><div>
 {alignment_button}
   <button id="sq" onclick="toggleSmart()" title="curly quotes and em dashes as you type">
     &ldquo;&nbsp;&rdquo;</button>
@@ -1069,14 +1102,15 @@ PAGE = """<!DOCTYPE html>
   <button onclick="fs(1)">A+</button>
   {theme_control}
   <button type="button" id="open-draft-help" aria-controls="draft-help">Walkthrough</button>
-  <label>Comment highlight
-    <select id="comment-tone">
-      <option value="light-purple">Light purple</option>
-      <option value="purple">Purple</option>
-      <option value="light-blue">Light blue</option>
-    </select>
-  </label>
+  </div></details>
+  <details class="reader-menu exports-menu" id="exports-menu"><summary id="exports-trigger">Exports</summary><div>
+  <button onclick="exportWord()" title="export all drafted chapters with comments">Word</button>
   <label>Word comment author <input id="comment-author" maxlength="100" placeholder="Translator"></label>
+  <button onclick="copyDocs()" title="copy with Chapter heading (Cmd+Enter)">Copy for Google Docs</button>
+  <button onclick="backup()" title="download every drafted chapter as one timestamped .txt">Draft text backup</button>
+  <button onclick="fullProjectBackup()"
+    title="source, drafts, timings, settings and review text for the web library">Full project backup</button>
+  <!-- hosted-import-drafts -->
   <section id="snapshot-options" hidden>
     <label>Snapshot interval (minutes) <input type="number" id="snapshot-minutes" min="1" max="1440" value="15" required></label>
     <button type="button" id="snapshot-toggle">Choose snapshot folder</button>
@@ -1084,43 +1118,15 @@ PAGE = """<!DOCTYPE html>
   </section>
   </div></details>
   <button id="italic" type="button" aria-label="Italic" title="italic (Cmd/Ctrl+I)" aria-pressed="false" onmousedown="event.preventDefault()" onclick="toggleItalic()">I</button>
-  <button onclick="exportWord()" title="export all drafted chapters with comments">Word</button>
-  <button class="act" onclick="backup()"
-    title="download every drafted chapter as one timestamped .txt">backup</button>
-  <button class="act" onclick="fullProjectBackup()"
-    title="source, drafts, timings, settings and review text for the web library">full project backup</button>
   <button class="act" onclick="openStats()" title="project statistics">stats</button>
   <button class="act" onclick="openFind()"
-    title="does this term come up again? (Cmd+Shift+F, uses your selection)">find</button>
-  <button class="act" onclick="copyDocs()" title="copy with Chapter heading (Cmd+Enter)">
-    copy for Docs</button>
+    title="Find across the book (Cmd+Shift+F, uses your selection)">find</button>
 </header>
 <div id="wrap">
   <div id="cn"></div>
   <div id="pane">
     <div id="ta" contenteditable="true" role="textbox" aria-label="Translation" aria-multiline="true" spellcheck="true"></div>
     <div id="comment-marks" aria-hidden="true"></div>
-    <aside id="draft-help" aria-label="Draft walkthrough" hidden>
-      <div aria-live="polite">
-        <section>
-          <h2>Start your draft</h2>
-          <p>Choose a chapter at the top. Read Chinese on the left and write your English translation on the right. Drafts save automatically. Use the Italic button or Cmd/Ctrl+I for italics.</p>
-        </section>
-        <section hidden>
-          <h2>Link Chinese and English</h2>
-          <p>With sync on, click a Chinese paragraph to read its English. To link several Chinese paragraphs to one English line, put the cursor in that line, Option/Alt-click the first Chinese paragraph, then Shift-click the last.</p>
-        </section>
-        <section hidden>
-          <h2>Comment and export</h2>
-          <p>Select English text and click the speech bubble to add a note. Click marked text to reopen it. Use Word to download your draft with its formatting and comments.</p>
-        </section>
-      </div>
-      <div class="actions">
-        <button type="button" id="draft-help-skip">Skip</button>
-        <button type="button" id="draft-help-back" hidden>Back</button>
-        <button type="button" id="draft-help-next" class="act">Next</button>
-      </div>
-    </aside>
     <div id="foot">
       <span id="ind">&nbsp;</span>
       <span id="wc"></span>
@@ -1133,16 +1139,50 @@ PAGE = """<!DOCTYPE html>
     </div>
   </div>
 </div>
+<aside id="draft-help" aria-label="Draft walkthrough" hidden>
+  <div id="draft-help-spotlight" aria-hidden="true"></div>
+  <span id="draft-help-comment-preview" aria-hidden="true" hidden><span class="comment-add-icon">+</span></span>
+  <div id="draft-help-card">
+    <div aria-live="polite">
+      <section data-target="#sel">
+        <h2>Choose a chapter</h2>
+        <p>Use the chapter list or the arrows to move between chapters.</p>
+      </section>
+      <section data-target="#ta" hidden>
+        <h2>Write your translation</h2>
+        <p>Read the Chinese on the left and type your English on the right. Drafts save automatically.</p>
+      </section>
+      <section data-target="#italic" hidden>
+        <h2>Use italics</h2>
+        <p>Select text and click Italic, or press Cmd/Ctrl+I.</p>
+      </section>
+      <section data-target="#sy" hidden>
+        <h2>Link Chinese and English</h2>
+        <p>With sync on, click a Chinese paragraph to see its English. To link several Chinese paragraphs to one English line, put the cursor in that line, Option/Alt-click the first Chinese paragraph, then Shift-click the last.</p>
+      </section>
+      <section data-target="#draft-help-comment-preview" hidden>
+        <h2>Leave a comment</h2>
+        <p>Select English text to reveal this speech bubble beside it. Click it to add a note. Click the blue-highlighted text to reopen the note.</p>
+      </section>
+      <section data-target="#exports-trigger" hidden>
+        <h2>Export to Word</h2>
+        <p>Open Exports and choose Word to download your drafts as a DOCX with italics and comments.</p>
+      </section>
+    </div>
+    <div class="actions">
+      <button type="button" id="draft-help-skip">Skip</button>
+      <button type="button" id="draft-help-back" hidden>Back</button>
+      <button type="button" id="draft-help-next" class="act">Next</button>
+    </div>
+  </div>
+</aside>
 {alignment}
 <div id="find">
   <div class="top">
-    <input id="q" placeholder="term to look up" oninput="runFind()" spellcheck="false">
-    <select id="search-text" aria-label="Search text" onchange="runFind()"><option value="source">Source</option><option value="translation">Translation</option></select>
-    <select id="search-scope" aria-label="Search scope" onchange="runFind()"><option value="future">Future chapters</option><option value="book">Whole book</option></select>
+    <input id="q" aria-label="Term to look up" placeholder="term to look up" oninput="runFind()" spellcheck="false">
     <button onclick="closeFind()">close</button>
   </div>
-  <div id="verdict"></div>
-  <div id="past"></div>
+  <div id="verdict" role="status"></div>
   <div id="hits"></div>
 </div>
 <div id="stats">

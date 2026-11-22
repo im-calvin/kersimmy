@@ -1,6 +1,6 @@
 // Dismiss only when a press starts and ends on the backdrop. Dragging a text
 // selection out of a dialog must not accidentally close it.
-for (const dialog of document.querySelectorAll('dialog')) {
+export function dismissOnBackdrop(dialog) {
   let pressedOutside = false;
   const outside = event => {
     const rect = dialog.getBoundingClientRect();

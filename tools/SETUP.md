@@ -1,4 +1,4 @@
-# Translation reader — setup for a new manuscript
+# Kersimmy setup for a new manuscript
 
 A side-by-side Chinese→English drafting tool. Static HTML, no server, no
 install, no internet. Works on any Chinese source text file.
@@ -52,9 +52,8 @@ pick it once at the start.
 Drafts, preferences, chapter timings and alignment offsets all live in browser
 storage. That survives regenerating the HTML and moving the folder. It does
 **not** survive clearing browsing data, a different Chrome profile, or
-Incognito. Use "copy for Docs" as you finish each chapter — that is the real
-archive, and it also triggers a full timestamped `.txt` backup to your
-Downloads folder.
+Incognito. Use **Exports → Copy for Google Docs** as you finish each chapter.
+It also downloads a timestamped `.txt` backup.
 
 ## `paragraph_mode`, briefly
 

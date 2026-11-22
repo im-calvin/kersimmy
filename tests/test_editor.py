@@ -2,7 +2,7 @@
 from playwright.sync_api import expect
 
 from test_comments import add_comment, project, select, word, word_passages, NS
-from test_reader_behavior import saved
+from test_reader_behavior import open_exports, saved
 
 
 def test_italics_preserve_text_and_survive_chapter_switch_and_word(reader):
@@ -142,6 +142,7 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     try:
         page.locator('#ta').press('ControlOrMeta+i')
         expect(page.locator('#reader-server-status')).to_contain_text('Connection lost')
+        expect(page.get_by_role('button', name='Download recovery backup')).to_be_visible()
         recovery = page.evaluate("id=>JSON.parse(localStorage.getItem('original-reader-pending:'+id))", book_id)
         assert recovery['state']['italics']['1'] == [{'start': 4, 'end': 8}]
     finally:
@@ -150,8 +151,9 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     page.reload()
     expect(page.locator('#ta em')).to_have_text('moon')
     # Importing a plain-text replacement must clear its old formatting.
+    menu = open_exports(page)
     with page.expect_file_chooser() as chooser:
-        page.get_by_role('button', name='import drafts', exact=True).click()
+        menu.get_by_role('button', name='Import drafts', exact=True).click()
     page.once('dialog', lambda dialog: dialog.accept())
     chooser.value.set_files({'name': 'draft.txt', 'mimeType': 'text/plain', 'buffer': b'Chapter 1\nPlain replacement.'})
     expect(page.locator('#ta')).to_have_js_property('value', 'Plain replacement.')
@@ -170,8 +172,9 @@ def test_copy_for_docs_preserves_italics_and_selection(reader):
     page.evaluate('''()=>window.addEventListener('copy',e=>{
       window.copied={text:e.clipboardData.getData('text/plain'),html:e.clipboardData.getData('text/html')};
     },{once:true})''')
+    menu = open_exports(page)
     with page.expect_download():
-        page.get_by_role('button', name='copy for Docs', exact=True).click()
+        menu.get_by_role('button', name='Copy for Google Docs', exact=True).click()
     copied = page.evaluate('window.copied')
     assert copied['text'] == 'Chapter 1\n\nThe moon shines.\n'
     assert '<em>moon</em>' in copied['html']
@@ -247,7 +250,7 @@ def test_file_reader_schedules_portable_snapshots(page, reader_environment):
     })()""")
     page.goto((reader_environment['local'] / 'draft.html').as_uri())
     page.locator('#ta').fill('First version.')
-    page.locator('summary').get_by_text('View', exact=True).click()
+    open_exports(page)
     page.get_by_label('Snapshot interval (minutes)').fill('1')
     page.get_by_role('button', name='Choose snapshot folder').click()
     expect(page.locator('#snapshot-status')).to_contain_text('Snapshot saved')

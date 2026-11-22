@@ -5,10 +5,16 @@ window.readerStart = async function(config, startOriginal) {
   enableEditors(false);
   const status=document.createElement('div');status.id='reader-server-status';status.setAttribute('role','status');
   document.body.prepend(status);
+  const recovery=document.createElement('button');recovery.textContent='Download recovery backup';
+  recovery.hidden=config.mode==='draft';
   const key='original-reader-pending:'+config.id;
   let state,book,revision,memory={},pending=false,blocked=false,saving=false,timer,generation=0,suppress=false,batchDepth=0,batchChanged=false;
   const defaults={italics:{},comments:{},drafts:{},positions:{},offsets:{},alignmentGroups:{},times:{},current:null,fontSize:19,smart:false,sync:true,wordsPerPage:null,reviewEnglish:{},reviewMode:'chapter',reviewFontSize:19,legacyStorage:{}};
-  const show=(text,error=false)=>{status.textContent=text;status.classList.toggle('error',error)};
+  const show=(text,error=false)=>{
+    status.textContent=text;
+    status.classList.toggle('error',error);
+    if(config.mode==='draft')recovery.hidden=!error||!book;
+  };
   async function request(path,method='GET',body) {
     let response;
     try {response=await fetch('/api/'+path,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});}
@@ -42,8 +48,9 @@ window.readerStart = async function(config, startOriginal) {
   }
   function queue() {
     if(batchDepth){batchChanged=true;return}
-    pending=true;generation++;recover();
+    pending=true;generation++;
     if(!blocked)show('Saving to server…');
+    recover();
     clearTimeout(timer);timer=setTimeout(save,400);
   }
   window.readerStorage={get length(){return Object.keys(memory).length},key:i=>Object.keys(memory)[i]??null,
@@ -79,7 +86,7 @@ window.readerStart = async function(config, startOriginal) {
     download('reader-recovery-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',{format:'translation-reader',version:1,books:[{book,state:snapshot()}]});
   };
   window.readerBackup=backup;
-  const recovery=document.createElement('button');recovery.textContent='Download recovery backup';recovery.onclick=backup;
+  recovery.onclick=backup;
   const retry=document.createElement('button');retry.textContent='Retry save';retry.onclick=()=>{if(!blocked)save();else show('Download a recovery backup, then reload to resolve conflicting edits.',true)};
   const bar=document.createElement('div');bar.style.cssText='padding:4px 12px;display:flex;gap:8px';bar.append(recovery,retry);status.after(bar);
   try {

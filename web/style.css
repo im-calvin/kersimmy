@@ -129,8 +129,7 @@ a{
   color:var(--muted)
 }
 .masthead-options{display:flex;align-items:center;gap:16px}
-.masthead .theme-setting{flex-direction:row;align-items:center;margin:0;white-space:nowrap}
-.masthead .theme-setting select{width:auto;padding:.3rem .4rem}
+.masthead .theme-toggle{font-size:20px;line-height:1;width:32px;height:32px;padding:0}
 .intro{
   padding:64px 0 28px
 }

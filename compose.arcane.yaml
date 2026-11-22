@@ -1,7 +1,14 @@
+name: kersimmy
+
 services:
   reader:
     image: ${READER_IMAGE:-ghcr.io/im-calvin/translate:latest}
     restart: unless-stopped
+    command: ["python", "tools/reader_server.py", "--host", "0.0.0.0", "--port", "8888"]
+    ports:
+      - "127.0.0.1:${READER_HOST_PORT:-8888}:8888"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/api/status', timeout=3).close()"]
     environment:
       BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
       BACKUP_KEEP: "${BACKUP_KEEP:-96}"
@@ -10,18 +17,9 @@ services:
       - /tmp:mode=1777
     volumes:
       - reader_data:/data
-    networks:
-      tunnel:
-        aliases:
-          - translation-reader
     stop_grace_period: 30s
 
 volumes:
   reader_data:
     external: true
-    name: ${READER_DATA_VOLUME:-translation-reader_reader_data}
-
-networks:
-  tunnel:
-    external: true
-    name: ${CLOUDFLARED_NETWORK:?Set CLOUDFLARED_NETWORK to the network shared with cloudflared}
+    name: ${READER_DATA_VOLUME:-kersimmy}

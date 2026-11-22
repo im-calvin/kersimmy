@@ -1,4 +1,4 @@
-# Translation reader codebase guide
+# Kersimmy codebase guide
 
 ## Purpose and scope
 
@@ -18,8 +18,9 @@ root output merely to inspect the project.
 See [ROADMAP.md](ROADMAP.md) for the high-level goal, completed product baseline,
 remaining work, and shared-glossary stretch goal. Use the local editor as the
 reference for hosted behavior. The draft walkthrough appears on the first visit
-and can be reopened under **View → Walkthrough**. Theme follows the system by
-default, with Light and Dark overrides. Dark mode uses beige reading text.
+and can be reopened under **View → Walkthrough**. Theme follows the system until
+the user switches it with the sun or moon under **View** in the draft. Dark mode
+uses beige reading text.
 
 The hosted glossary is browser-local per book. Underlined Chinese terms show
 their English translation and usage note on hover or keyboard focus. Google
@@ -195,8 +196,8 @@ items compatible with old generated readers.
 Server book records include complete source and optional GIF data URLs. State
 holds drafts, italic ranges, passage comments, positions, offsets, alignment
 groups, times, font size, page size, review text/settings, and legacy storage
-values. Image updates are separate from frequent state writes. Theme, comment
-highlight color, walkthrough dismissal, and the hosted glossary stay in browser
+values. Image updates are separate from frequent state writes. Theme,
+walkthrough dismissal, and the hosted glossary stay in browser
 storage. The Word comment author is saved with the book.
 
 Generated hosted pages use an in-memory `readerStorage` adapter with the original
@@ -228,15 +229,15 @@ tests pushes to `main` and publishes passing builds to
 job to match the pinned Playwright release. Optional automatic redeploy requires
 repository variable `ARCANE_DEPLOY_ENABLED=true` and the `ARCANE_WEBHOOK_URL`
 secret in GitHub's `production` environment. Arcane records the deployment
-result. Cloudflared routes
-`translate.bxian03.com` to `http://translation-reader:8000` on the shared Docker
-network. Protect public access with Cloudflare Access. Verify the remote
-deployment on the Docker host before reporting it as live.
+result. Host-installed cloudflared routes `translate.bxian03.com` to
+`http://127.0.0.1:8888` on the same host as Docker. Protect public access with
+Cloudflare Access. Verify the remote deployment on the Docker host before
+reporting it as live.
 
 Arcane Compose mounts an external volume at `/data`. Create the default
-`translation-reader_reader_data` volume once, or use `READER_DATA_VOLUME` to
-reuse an existing volume. `CLOUDFLARED_NETWORK` names the connector's Docker
-network. Arcane Git Pull sync uses `main` and `compose.arcane.yaml`. Confirm
+`kersimmy` volume once, or use `READER_DATA_VOLUME` to
+reuse an existing volume. `READER_HOST_PORT` overrides the published loopback
+port. Arcane Git Pull sync uses `main` and `compose.arcane.yaml`. Confirm
 that the Compose file and workflow are pushed before relying on remote deploys.
 
 The workspace is a Git checkout tracking `main` on `im-calvin/translate`.
@@ -245,6 +246,15 @@ The public repository and container builds exclude manuscripts, local config,
 database files, backups, and credentials.
 
 ## Validation
+
+For user-facing changes, include a browser pass before calling the work done.
+Use Playwright MCP when available and permitted by the active environment.
+Open the changed flow on a disposable reader, reproduce the user action, and
+verify the resulting behavior. Check the rendered UI for visual changes, and
+exercise both themes or relevant viewports when the change affects them. If
+Playwright MCP is unavailable, use the environment's approved browser tools or
+the repository's Playwright suite. Run the relevant automated checks and report
+what was verified and any gaps in the handoff.
 
 Self-contained Playwright setup and local/hosted behavior checks are documented in
 `tests/README.md`. Install `requirements-test.txt` and Chromium in `.venv`, then run

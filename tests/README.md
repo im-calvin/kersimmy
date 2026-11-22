@@ -71,7 +71,7 @@ Run these Quip-based cases in both readers with
 For a Playwright MCP smoke test, open a disposable hosted manuscript with draft
 text. Select a word, open the comment control beside it, and save a note. Wait
 for the server status to show it has synced. Reload and click the underlined word
-to reopen the note, then use Word to download the document. Check the download
+to reopen the note, then use **Exports → Word** to download the document. Check the download
 for the original passage and note. The automated suite checks the DOCX package
 structure. Opening the file in Microsoft Word is a separate check.
 

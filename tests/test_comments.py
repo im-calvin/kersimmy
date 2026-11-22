@@ -8,7 +8,7 @@ import zipfile
 import pytest
 from playwright.sync_api import expect
 
-from test_reader_behavior import saved
+from test_reader_behavior import open_exports, saved
 
 NS = {
     'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
@@ -37,14 +37,16 @@ def add_comment(page, text):
 
 
 def project(page):
+    menu = open_exports(page)
     with page.expect_download() as download:
-        page.get_by_role('button', name='full project backup', exact=True).click()
+        menu.get_by_role('button', name='Full project backup', exact=True).click()
     return json.loads(Path(download.value.path()).read_text())['books'][0]
 
 
 def word_parts(page):
+    menu = open_exports(page)
     with page.expect_download() as download:
-        page.get_by_role('button', name='Word', exact=True).click()
+        menu.get_by_role('button', name='Word', exact=True).click()
     assert download.value.suggested_filename.endswith('.docx')
     with zipfile.ZipFile(download.value.path()) as package:
         assert package.testzip() is None
@@ -132,8 +134,7 @@ def test_docx_transfers_multiline_comment_italics_and_author(reader):
     page.get_by_role('button', name='Italic', exact=True).click()
     select(page, start, start + len(passage.encode('utf-16-le')) // 2)
     add_comment(page, note)
-    page.locator('.reader-options summary').click()
-    page.get_by_label('Word comment author').fill('Lin & 李')
+    open_exports(page).get_by_label('Word comment author').fill('Lin & 李')
     saved(reader)
     page.reload()
 
@@ -280,9 +281,9 @@ def test_click_underlined_comment_and_export_author(reader):
     dialog.get_by_label('Comment', exact=True).fill('Check the phrase.')
     dialog.get_by_label('Comment', exact=True).press('Enter')
     expect(dialog).to_be_hidden()
-    page.locator('.reader-options summary').click()
+    menu = open_exports(page)
     expect(page.get_by_role('button', name='Chapter comments', exact=True)).to_have_count(0)
-    page.get_by_label('Word comment author').fill('A & B')
+    menu.get_by_label('Word comment author').fill('A & B')
     saved(reader)
     page.reload()
     _, comments = word(page)
@@ -290,8 +291,10 @@ def test_click_underlined_comment_and_export_author(reader):
     assert comments.find('w:comment', NS).get('{'+NS['w']+'}author') == 'A & B'
 
 
-def test_comment_highlight_is_visible_in_rendered_pixels(reader):
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_blue_comment_highlight_is_visible_in_rendered_pixels(reader, theme):
     page = reader['page']
+    page.emulate_media(color_scheme=theme)
     editor = page.get_by_role('textbox', name='Translation')
     text = 'Loremipsum dolor sit amet.'
     editor.fill(text)
@@ -300,7 +303,9 @@ def test_comment_highlight_is_visible_in_rendered_pixels(reader):
     select(page, 0, len(passage))
     add_comment(page, 'Check this word.')
     saved(reader)
+    page.evaluate("localStorage.setItem('translation-reader:comment-highlight', 'purple')")
     page.reload()
+    expect(page.locator('html')).to_have_css('color-scheme', theme)
     expect(editor).to_have_js_property('value', text)
     page.locator('#c1p1').click()
     clip = page.evaluate("""() => {
@@ -309,7 +314,7 @@ def test_comment_highlight_is_visible_in_rendered_pixels(reader):
         width:Math.floor(rect.width)-1,height:Math.floor(rect.height)-1};
     }""")
     screenshot = base64.b64encode(page.screenshot(clip=clip, scale='css')).decode()
-    purple_pixels = page.evaluate("""async png => {
+    blue_pixels = page.evaluate("""async png => {
       const picture=new Image();
       picture.src='data:image/png;base64,'+png;
       await picture.decode();
@@ -318,33 +323,16 @@ def test_comment_highlight_is_visible_in_rendered_pixels(reader):
       const context=canvas.getContext('2d');
       context.drawImage(picture,0,0);
       const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;
-      let purple=0;
+      let blueCount=0;
       for(let i=0;i<pixels.length;i+=4){
         const [red,green,blue]=pixels.subarray(i,i+3);
-        if(red>=170&&blue>=205&&red-green>=10&&blue-green>=14)purple++;
+        if(green-red>=8&&blue-green>=10)blueCount++;
       }
-      return purple/(pixels.length/4);
+      return blueCount/(pixels.length/4);
     }""", screenshot)
-    assert purple_pixels > 0.5
-
-
-def test_comment_highlight_color_changes_and_survives_reload(reader):
-    page = reader['page']
-    page.locator('#ta').fill('The moon shines.')
-    select(page, 4, 8)
-    add_comment(page, 'Check the word.')
-    saved(reader)
-    marker = page.locator('#comment-marks span').first
-    setting = page.get_by_label('Comment highlight')
-    expect(marker).to_have_css('background-color', 'rgb(237, 207, 255)')
+    assert blue_pixels > 0.5
     page.locator('.reader-options summary').click()
-    expect(setting).to_have_value('light-purple')
-    setting.select_option('light-blue')
-    expect(marker).to_have_css('background-color', 'rgb(204, 229, 255)')
-    page.reload()
-    expect(marker).to_have_css('background-color', 'rgb(204, 229, 255)')
-    page.locator('.reader-options summary').click()
-    expect(setting).to_have_value('light-blue')
+    expect(page.get_by_label('Comment highlight')).to_have_count(0)
 
 
 def test_comment_controls_follow_the_passage_and_leave_it_visible(reader):
