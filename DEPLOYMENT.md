@@ -157,29 +157,21 @@ clean open tabs reload on later release changes. Tabs with pending edits or open
 dialogs wait until they can reload safely. Tabs opened before release detection
 was introduced need one refresh to pick it up.
 
-Choose an update path:
+GitHub Actions tests and publishes the images. Arcane pulls and deploys them.
+Choose how Arcane checks for updates:
 
 - **Manual**. In the reader's Arcane project, choose **Redeploy** to pull the
   current image and recreate the container.
-- **Scheduled**. Under **Settings → Automations**, select the agent and turn
-  on **Image Update Watcher** and **Auto Update**. Check **Excluded Containers**
-  for any other workloads on the same agent that should keep their current
-  images. [Arcane auto-update documentation](https://getarcane.app/docs/docker/auto-updates)
-- **On publish**. In **System → Webhooks**, create a webhook for the reader
-  project with the **Redeploy** action. Save its full HTTPS URL as the
-  `ARCANE_WEBHOOK_URL` secret in the GitHub `production` environment and set
-  `ARCANE_DEPLOY_ENABLED=true` as a repository Actions variable. The URL is a
-  credential. GitHub-hosted runners need to reach its endpoint over HTTPS.
-  Save the Cloudflare Access service token's Client ID as `CF_ACCESS_CLIENT_ID`
-  and its Client Secret as `CF_ACCESS_CLIENT_SECRET` in the same GitHub
-  environment. Grant the token a Service Auth policy scoped to the webhook path.
-  Actions runs `tools/test_arcane_webhook.sh` with those three secrets. Run the
-  same script locally to test with hidden prompts. On failure, use the printed
-  Cloudflare Ray ID, when available, to look up the request in Security Events.
-  Compose pulls the configured image on deploy.
-  A successful request queues the job. Check Arcane's Event Log and the reader
-  container's health for the result.
-  [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
+- **Scheduled**. Keep `READER_IMAGE` on `ghcr.io/im-calvin/kersimmy:latest`.
+  Under **Settings → Automations**, select the agent and turn on **Image Update
+  Watcher** and **Auto Update**. Check **Excluded Containers** for any other
+  workloads on the agent that should keep their current images.
+  [Arcane auto-update documentation](https://getarcane.app/docs/docker/auto-updates)
+
+Use Arcane Git Pull sync for changes to `compose.arcane.yaml`. The image watcher
+handles new builds published under the same tag when the Compose file stays the
+same. After an update, check the reader container's health and `/api/status` on
+the Docker host.
 
 For a rollback, set `READER_IMAGE` in Arcane to a known-good
 `ghcr.io/im-calvin/kersimmy:sha-<full commit SHA>` tag or digest and redeploy the

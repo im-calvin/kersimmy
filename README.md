@@ -51,15 +51,11 @@ database files, and backups. [GitHub image publishing](https://docs.github.com/e
 
 ### Automatic deployment
 
-For an immediate redeploy after images publish, create a **Project → Redeploy**
-webhook in Arcane under **System → Webhooks**. Save the full URL as
-`ARCANE_WEBHOOK_URL` in the GitHub `production` environment and set the
-repository Actions variable `ARCANE_DEPLOY_ENABLED` to `true`. GitHub Actions calls
-the webhook after a successful publish. Arcane records the background
-deployment result in its Event Log. [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)
-
-For a private Arcane dashboard, use Arcane's scheduled image updates or choose
-**Redeploy** in the project after a publish. [Arcane update options](https://getarcane.app/docs/docker/auto-updates)
+GitHub Actions tests changes and publishes passing builds to GHCR. For a project
+tracking `ghcr.io/im-calvin/kersimmy:latest`, enable **Image Update Watcher** and
+**Auto Update** under **Settings → Automations** for its Arcane agent. To pull a
+new image immediately after publishing, choose **Redeploy** in the Arcane
+project. [Arcane update options](https://getarcane.app/docs/docker/auto-updates)
 
 ## Tests
 

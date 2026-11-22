@@ -129,8 +129,8 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
   exports, GIF, search, click-outside, sync, recovery, Word/custom headings.
 - `Dockerfile`, `compose.yaml`, `compose.arcane.yaml`: container packaging,
   local Docker Compose, and the Arcane production project.
-- `.github/workflows/reader.yml`: tests, Docker smoke check, GHCR image publishing,
-  and optional Arcane redeploy webhook.
+- `.github/workflows/reader.yml`: tests, Docker smoke check, and GHCR image
+  publishing.
 - `README.md`, `DEPLOYMENT.md`, `web/README.md`: operating instructions.
 
 ## Where to make changes
@@ -270,19 +270,18 @@ The service has no application login and binds to loopback by default. The
 production deployment uses an Arcane Docker Compose project. GitHub Actions
 tests pushes to `main` and publishes passing builds to
 `ghcr.io/im-calvin/kersimmy` for AMD64 and ARM64. Use Ubuntu 24.04 for the test
-job to match the pinned Playwright release. Optional automatic redeploy requires
-repository variable `ARCANE_DEPLOY_ENABLED=true` and the `ARCANE_WEBHOOK_URL`
-secret in GitHub's `production` environment. Arcane records the deployment
-result. Host-installed cloudflared routes `translate.bxian03.com` to
-`http://127.0.0.1:8888` on the same host as Docker. Protect public access with
+job to match the pinned Playwright release. Arcane can pull and deploy published
+images on its own schedule. Host-installed cloudflared routes
+`translate.bxian03.com` to `http://127.0.0.1:8888` on the same host as Docker.
+Protect public access with
 Cloudflare Access. Verify the remote deployment on the Docker host before
 reporting it as live.
 
 Arcane Compose mounts an external volume at `/data`. Create the default
 `kersimmy` volume once, or use `READER_DATA_VOLUME` to
 reuse an existing volume. `READER_HOST_PORT` overrides the published loopback
-port. The configured update path is Arcane Git Pull sync every five minutes
-for `main` and `compose.arcane.yaml`, with the optional webhook job disabled.
+port. The configured update path uses Arcane Git Pull sync every five minutes
+for `main` and `compose.arcane.yaml`.
 For an unchanged Compose file tracking `:latest`, use Arcane's Image Update
 Watcher and Auto Update to pick up a new image.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and rollback procedures.

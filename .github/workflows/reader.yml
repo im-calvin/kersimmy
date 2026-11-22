@@ -1,4 +1,4 @@
-name: Reader CI and delivery
+name: Reader CI and publishing
 
 on:
   pull_request:
@@ -87,22 +87,3 @@ jobs:
             ${{ steps.registry.outputs.image }}:latest
             ${{ steps.registry.outputs.image }}:sha-${{ github.sha }}
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-
-  deploy:
-    needs: publish
-    if: ${{ vars.ARCANE_DEPLOY_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    environment: production
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - name: Request Arcane project redeployment
-        env:
-          ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: bash tools/test_arcane_webhook.sh
