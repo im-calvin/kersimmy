@@ -99,13 +99,24 @@ jobs:
       - name: Request Arcane project redeployment
         env:
           ARCANE_WEBHOOK_URL: ${{ secrets.ARCANE_WEBHOOK_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          if [ -z "$ARCANE_WEBHOOK_URL" ]; then
+          if [[ -z "$ARCANE_WEBHOOK_URL" ]]; then
             echo 'Set the production ARCANE_WEBHOOK_URL secret before enabling deployment.'
             exit 1
           fi
-          if ! status=$(curl --proto '=https' --silent --output /dev/null \
-            --write-out '%{http_code}' --max-time 60 --request POST "$ARCANE_WEBHOOK_URL"); then
+          headers=()
+          if [[ -n "$CF_ACCESS_CLIENT_ID" || -n "$CF_ACCESS_CLIENT_SECRET" ]]; then
+            if [[ -z "$CF_ACCESS_CLIENT_ID" || -z "$CF_ACCESS_CLIENT_SECRET" ]]; then
+              echo 'Set both production Cloudflare Access secrets for a protected webhook.'
+              exit 1
+            fi
+            headers+=(--header "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID")
+            headers+=(--header "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+          fi
+          if ! status=$(curl --proto '=https' --globoff --silent --show-error --output /dev/null \
+            --write-out '%{http_code}' --max-time 60 --request POST "${headers[@]}" -- "$ARCANE_WEBHOOK_URL"); then
             echo 'GitHub Actions could not reach the Arcane webhook.'
             exit 1
           fi

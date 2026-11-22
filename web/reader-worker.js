@@ -2,7 +2,7 @@
 const cacheName = 'kersimmy-draft-pages-v1';
 const assets = [
   '/reader-storage.js', '/reader-offline.js', '/glossary-poc.css',
-  '/glossary-poc.js', '/dialogs.js',
+  '/glossary-poc.js', '/dialogs.js', '/site-brand.css', '/site-icon.png',
 ];
 
 self.addEventListener('install', event => {

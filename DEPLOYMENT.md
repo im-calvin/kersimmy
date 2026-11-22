@@ -33,7 +33,8 @@ empty library, ready for a manuscript or a full-project backup.
 - Concurrent stale writes are rejected. The local draft stays open, even after
   a reload. Download a recovery backup to keep it, then choose **Use server
   version** to discard the pending edits and reopen the saved server copy.
-- Open a draft online and wait for **Available offline**. That draft can then
+- Open a draft online and check the toolbar's save status menu for
+  **Available offline**. That draft can then
   reload and be edited offline in the same browser at the same address.
   Interrupted saves retain a recovery snapshot in browser storage and retry
   automatically on reconnect. The library, imports, and previously unopened
@@ -169,6 +170,10 @@ Choose an update path:
   `ARCANE_WEBHOOK_URL` secret in the GitHub `production` environment and set
   `ARCANE_DEPLOY_ENABLED=true` as a repository Actions variable. The URL is a
   credential. GitHub-hosted runners need to reach its endpoint over HTTPS.
+  For a webhook protected by Cloudflare Access, save the service token's Client
+  ID as `CF_ACCESS_CLIENT_ID` and its Client Secret as `CF_ACCESS_CLIENT_SECRET`
+  in the same GitHub environment. Grant the token a Service Auth policy scoped
+  to the webhook path. Compose pulls the configured image on deploy.
   A successful request queues the job. Check Arcane's Event Log and the reader
   container's health for the result.
   [Arcane webhook documentation](https://getarcane.app/docs/reference/api#inbound-webhooks)

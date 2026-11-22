@@ -1,4 +1,5 @@
 """The original file reader is the reference for shared editor behavior."""
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -234,18 +235,16 @@ def test_exports_preserve_source_and_draft(reader):
     page = reader['page']
     page.set_viewport_size({'width': 410, 'height': 720})
     page.emulate_media(color_scheme='dark')
+    start = datetime.now(timezone.utc)
+    page.clock.set_fixed_time(start)
+    page.locator('#ta').fill(DRAFT[:-1])
+    page.clock.set_fixed_time(start + timedelta(minutes=2))
     page.locator('#ta').fill(DRAFT)
     saved(reader)
-    for minutes in ('45', '70'):
-        page.get_by_role('button', name='stats', exact=True).click()
-        page.get_by_label('Current chapter time (minutes)').fill(minutes)
-        page.get_by_role('button', name='Save time').click()
-        dismiss(reader, '#stats')
-        saved(reader)
     page.reload()
     page.get_by_role('button', name='stats', exact=True).click()
-    expect(page.get_by_label('Current chapter time (minutes)')).to_have_value('70')
-    expect(page.locator('#cards')).to_contain_text('1h 10m')
+    expect(page.get_by_role('button', name='Save time', exact=True)).to_have_count(0)
+    expect(page.locator('#cards')).to_contain_text('2m')
     dismiss(reader, '#stats')
     expect(page.get_by_role('button', name='Word', exact=True)).to_be_hidden()
     expect(page.get_by_role('button', name='Download recovery backup')).to_be_hidden()
@@ -268,11 +267,20 @@ def test_exports_preserve_source_and_draft(reader):
     assert payload['version'] == 1
     entry = payload['books'][0]
     assert entry['state']['drafts']['1'] == DRAFT
-    assert entry['state']['times'] == {'1': 4200000}
+    assert entry['state']['times'] == {'1': 120000}
     assert entry['book']['chapters'][1]['paras'][0] == '后来月光'
     page.keyboard.press('Escape')
     expect(menu.get_by_role('button', name='Word', exact=True)).to_be_hidden()
     expect(page.locator('#exports-trigger')).to_be_focused()
+    if reader['mode'] == 'hosted':
+        base = reader['urls']['draft'].split('/books/')[0]
+        entry['state']['times']['1'] = 4200000
+        restored = page.request.post(base + '/api/import', data=payload)
+        assert restored.status == 201, restored.text()
+        book_id = restored.json()[0]['id']
+        page.goto(f'{base}/books/{book_id}/draft')
+        page.get_by_role('button', name='stats', exact=True).click()
+        expect(page.locator('#cards')).to_contain_text('1h 10m')
 
 
 def test_review_text_is_separate_and_persistent(reader):

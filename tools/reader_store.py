@@ -111,6 +111,7 @@ def validate(book, state):
     if not isinstance(chapters, list) or not chapters:
         raise ValueError('Chapters are required')
     validate_image(book.get('illustration'))
+    validate_icon(book.get('icon'))
     numbers = set()
     displayed = set()
     for chapter in chapters:
@@ -190,6 +191,19 @@ def validate(book, state):
                 raise ValueError('Invalid comment thread')
             ids.add(note['id'])
 
+
+
+def validate_icon(icon):
+    if icon is None:
+        return None
+    prefix = 'data:image/png;base64,'
+    if not isinstance(icon, str) or not icon.startswith(prefix) or len(icon) > 100_000:
+        raise ValueError('Invalid book icon.')
+    raw = base64.b64decode(icon[len(prefix):], validate=True)
+    if (len(raw) < 33 or raw[:16] != b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'
+            or not all(1 <= int.from_bytes(raw[i:i+4], 'big') <= 128 for i in (16, 20))):
+        raise ValueError('Invalid book icon.')
+    return icon
 
 
 def validate_image(image):

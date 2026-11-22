@@ -19,6 +19,13 @@ SQLite saves your work and makes it available to other browsers using this serve
    correct its title before importing.
 4. Add to library, then open the book.
 
+Open **Settings → Set book icon** on a library card to choose its icon. The icon is stored
+with the book and included in JSON backups.
+
+Use **Settings → Remove book → Delete book** to remove a book and its
+saved drafts and comments. Use **Settings → Back up book** first if you want to
+keep a restorable copy.
+
 Default headings include 第1章, 第一回, and Chapter 1. Use One chapter for an
 unnumbered manuscript, or Custom heading pattern for a Python regular expression
 with chapter number in capture group 1 and optional title in group 2. Python
@@ -40,13 +47,13 @@ keeping their drafts distinct. The preview and reader group chapters under
 their volume names. Automatic import also groups numbered `番外` stories under
 a `番外篇` heading.
 
-For an existing book, click **Edit chapters** on its library card. Edit titles
+For an existing book, click **Settings** on its library card. Edit titles
 directly or select chapters and assign a volume. Applying an empty volume name
 clears the assignment. **Save chapters** keeps chapter keys and draft state
 intact. The save checks the book revision, so concurrent edits require reopening
 the organizer before retrying.
 
-Use **Edit chapters → Recheck import** to upload the original file again and
+Use **Settings → Recheck import** to upload the original file again and
 try different parsing settings. You can apply the new titles and volume metadata
 if the chapter IDs, order, and source paragraphs still match. If the source or
 chapter boundaries change, use **Add manuscript** to import a separate copy.
@@ -66,9 +73,10 @@ first draft you added through **Add manuscript** in that browser. Replay it from
 for italics. Select a translation passage and choose the Add comment speech bubble
 beside the selection.
 
-To add or correct time spent on a chapter, open that chapter and use
-**Stats → Current chapter time (minutes) → Save time**. The value replaces the
-chapter’s recorded time. Full project and library JSON backups include it.
+**Stats** displays the total time recorded while editing drafts and comments.
+Full project and library JSON backups store chapter times in `state.times`,
+keyed by chapter ID in milliseconds. Update that field in a backup to correct
+recorded times before restoring a copy of the book.
 Use the sun or moon icon under **View** in the draft, or in the library or review
 toolbar, to switch themes. The reader follows your system theme until you choose
 a theme, then remembers it in your browser.
@@ -94,10 +102,12 @@ original close buttons also work. The library/import form uses native dialogs.
 
 ## Saving, sync, migration
 
-Wait for **Available offline** the first time you open a draft online. You can
-then refresh and edit that draft without a connection using the same browser and
-address. The library and imports require a connection. Draft changes stay on the
-device until the editor shows **Synced to server**.
+The toolbar shows a filled circle when synced and an empty circle otherwise. Click it for details and
+**Retry save** when a save can be retried. The first time you open a draft
+online, check for **Available offline** there. You can then refresh and edit
+that draft without a connection using the same browser and address. The library
+and imports require a connection. Draft changes stay on the device until the
+status reads **Synced to server**.
 
 Clean pages refresh when another device saves. If there are pending edits, the
 server compares the book revision and rejects an older write. Your local draft
@@ -111,7 +121,7 @@ library copies an older IndexedDB library at the same browser origin/profile;
 for another address, export JSON there and use Restore backup here. Browser
 copies are retained. Repeating migration creates new independent copies.
 
-The library Back up library and book Backup buttons export full JSON. In the
+The library Back up library and **Settings → Back up book** export full JSON. In the
 draft's **Exports** menu, **Draft text backup** exports English text and
 **Full project backup** exports a project JSON. **Import drafts** accepts
 Chapter N text backups.

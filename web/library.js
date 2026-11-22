@@ -1,5 +1,5 @@
 import {dismissOnBackdrop} from './dialogs.js';
-import {previewManuscript, getBundle, setVolumes, updateImport} from './db.js';
+import {previewManuscript, getBundle, setVolumes, updateImport, deleteBook, setBookIcon} from './db.js';
 const stripHeading = text => text.replace(/^\s*(?:Chapter|Ch\.?)\s+\d+[^\n]*\n/i, '').trim();
 import {listBooks, serverMode, migrateBrowserLibrary, backupServer, serverStatus, getBook, getState, importBooks, backupPayload, readBackup, download, filename, stamp} from './db.js';
 const $ = id => document.getElementById(id);
@@ -16,30 +16,96 @@ async function exportBooks(books) {
   download(`${books.length === 1 ? filename(books[0].title) : 'library'}-${stamp()}.json`, JSON.stringify(backupPayload(entries), null, 2));
   message('Backup downloaded. Restore it here or on another device to continue.');
 }
+const bookCards = new Map();
+let libraryRefresh = 0;
+
+async function readBookIcon(file) {
+  if (file.size > 5 * 1024 * 1024) throw new Error('Choose an image smaller than 5 MB.');
+  const image = await createImageBitmap(file);
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const scale = 128 / Math.max(image.width, image.height);
+    const width = image.width * scale, height = image.height * scale;
+    canvas.getContext('2d').drawImage(image, (128 - width) / 2, (128 - height) / 2, width, height);
+    return canvas.toDataURL('image/png');
+  } finally {
+    image.close();
+  }
+}
+
+function createBookCard(id) {
+  const card = element('article', '', 'book-card');
+  const counts = element('p', '', 'eyebrow');
+  const heading = element('div', '', 'book-card-heading');
+  const icon = document.createElement('img');
+  icon.className = 'book-card-icon';
+  icon.alt = '';
+  icon.hidden = true;
+  const title = element('h2', '');
+  heading.append(icon, title);
+  const actions = element('div', '', 'card-actions');
+  const link = element('a', '', 'book-link');
+  link.href = `/books/${encodeURIComponent(id)}/draft`;
+  const settings = element('button', 'Settings', 'subtle');
+  settings.onclick = async () => {
+    settings.disabled = true;
+    try { await openBookSettings(id); } catch (error) { message(error.message, true); }
+    finally { settings.disabled = false; }
+  };
+  actions.append(link, settings);
+  card.append(counts, heading, actions);
+
+  function update(book, state) {
+    const drafted = Object.values(state.drafts).some(text => stripHeading(text));
+    const chapterCount = book.chapters.length;
+    const displayTitle = book.title.replace(/^TTEOTM\s*(?:[–—:·-]\s*)?\(?\s*Eng(?:lish)?\.?\s+drafts?\s+for\s+chapte(?:rs?|s)\s+2\s*[–—-]\s*6\s*\)?$/i, 'TTEOTM');
+    const labels = [
+      [counts, `${chapterCount} ${chapterCount === 1 ? 'chapter' : 'chapters'}`],
+      [title, displayTitle],
+      [link, drafted ? 'Continue' : 'Open manuscript'],
+    ];
+    for (const [node, text] of labels) if (node.textContent !== text) node.textContent = text;
+    link.setAttribute('aria-label', `${link.textContent} ${displayTitle}`);
+    if (book.icon && icon.getAttribute('src') !== book.icon) icon.src = book.icon;
+    if (!book.icon) icon.removeAttribute('src');
+    icon.hidden = !book.icon;
+  }
+  return {card, update};
+}
+
 async function renderLibrary() {
-  const books = await listBooks();
-  $('books').replaceChildren();
+  const refresh = ++libraryRefresh;
+  const books = (await listBooks()).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  const states = await Promise.all(books.map(book => getState(book.id)));
+  if (refresh !== libraryRefresh) return;
+  const container = $('books');
   $('backup-library').disabled = !books.length;
+  const ids = new Set(books.map(book => book.id));
+  for (const [id, {card}] of bookCards) {
+    if (!ids.has(id)) {
+      card.remove();
+      bookCards.delete(id);
+    }
+  }
+  const placeholder = container.querySelector('.empty-library');
   if (!books.length) {
-    const empty = element('div', '', 'empty-library');
-    empty.append(element('span', '文 / A', 'empty-mark'), element('h2', 'Your library starts here'), element('p', 'Add a manuscript to see its chapters and begin translating.'));
-    $('books').append(empty);
+    if (!placeholder) {
+      const empty = element('div', '', 'empty-library');
+      empty.append(element('span', '文 / A', 'empty-mark'), element('h2', 'Your library starts here'), element('p', 'Add a manuscript to see its chapters and begin translating.'));
+      container.append(empty);
+    }
+    return;
   }
-  for (const book of books.sort((a,b) => b.createdAt.localeCompare(a.createdAt))) {
-    const state = await getState(book.id);
-    const drafted = Object.values(state.drafts).filter(t => stripHeading(t)).length;
-    const card = element('article', '', 'book-card');
-    const volumeCount=new Set(book.chapters.map(c=>c.volume).filter(Boolean)).size;
-    card.append(element('p', `${volumeCount ? volumeCount + ' VOLUMES · ' : ''}${book.chapters.length} CHAPTERS`, 'eyebrow'), element('h2', book.title), element('p', `${drafted} chapters started · ${book.chapters.reduce((n,c) => n+c.paras.length, 0).toLocaleString()} source paragraphs`, 'book-meta'));
-    const actions = element('div', '', 'card-actions');
-    const link = element('a', drafted ? 'Continue translating →' : 'Open manuscript →', 'book-link');
-    link.href = `/books/${encodeURIComponent(book.id)}/draft`;
-    const backup = element('button', 'Backup', 'subtle');
-    backup.onclick = () => exportBooks([book]).catch(e => message(e.message, true));
-    const organize=element('button','Edit chapters','subtle');
-    organize.onclick=async()=>{organize.disabled=true;try{await openVolumes(book.id)}catch(e){message(e.message,true)}finally{organize.disabled=false}};
-    actions.append(link, organize, backup); card.append(actions); $('books').append(card);
-  }
+  placeholder?.remove();
+  let next = container.firstChild;
+  books.forEach((book, index) => {
+    if (!bookCards.has(book.id)) bookCards.set(book.id, createBookCard(book.id));
+    const {card, update} = bookCards.get(book.id);
+    update(book, states[index]);
+    if (card !== next) container.insertBefore(card, next);
+    next = card.nextSibling;
+  });
 }
 function invalidate() {
   parsingVersion++; preview = null; $('confirm-import').disabled = true; $('preview').hidden = true; $('import-error').textContent = '';
@@ -181,13 +247,53 @@ $('import-current').onclick = async () => {
   finally { $('import-current').disabled = false; }
 };
 let organization=null, assignedVolumes={}, editedTitles={}, selectedChapters=new Set();
-async function openVolumes(id) {
+async function openBookSettings(id) {
   organization=await getBundle(id);assignedVolumes={};editedTitles={};selectedChapters=new Set();
+  $('book-settings-danger').open=false;
+  $('book-settings-status').textContent='';
+  showSettingsIcon(organization.book.icon);
   for(const chapter of organization.book.chapters)assignedVolumes[chapter.no]=chapter.volume||'';
   $('volumes-book').textContent=organization.book.title;
   $('volume-name').value='';$('volumes-error').textContent='';
   renderVolumes();$('volumes-dialog').showModal();
 }
+function showSettingsIcon(icon) {
+  const image = $('book-settings-icon');
+  if (icon) image.src = icon;
+  else image.removeAttribute('src');
+  image.hidden = !icon;
+}
+$('choose-book-icon').onclick = () => $('book-icon-file').click();
+$('book-icon-file').onchange = async () => {
+  const input = $('book-icon-file'), file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  const target = organization;
+  const button = $('choose-book-icon');
+  button.disabled = true;
+  try {
+    const {icon} = await setBookIcon(target.book.id, await readBookIcon(file));
+    target.book.icon = icon;
+    if (organization === target) {
+      showSettingsIcon(icon);
+      $('book-settings-status').textContent = 'Book icon saved.';
+    }
+    await renderLibrary();
+  } catch (error) {
+    if (organization === target) $('volumes-error').textContent = error.message;
+    else message(error.message, true);
+  } finally { button.disabled = false; }
+};
+$('backup-book').onclick = async () => {
+  const target = organization;
+  try {
+    await exportBooks([target.book]);
+    if (organization === target) $('book-settings-status').textContent = 'Backup downloaded.';
+  } catch (error) {
+    if (organization === target) $('volumes-error').textContent = error.message;
+    else message(error.message, true);
+  }
+};
 function renderVolumes() {
   const fragment=document.createDocumentFragment();
   for(const chapter of organization.book.chapters){
@@ -219,6 +325,36 @@ $('assign-volume').onclick=()=>{
   if(!selectedChapters.size){$('volumes-error').textContent='Select at least one chapter.';return}
   for(const no of selectedChapters)assignedVolumes[no]=$('volume-name').value.trim();
   $('volumes-error').textContent='';renderVolumes();
+};
+$('delete-book').onclick=async()=>{
+  const target=organization;
+  const {id,title}=target.book;
+  const confirmation=prompt(`To delete “${title}” and its saved drafts and comments, type I am an idiot sandwich`);
+  if(confirmation===null)return;
+  if(confirmation!=='I am an idiot sandwich'){
+    $('volumes-error').textContent='The confirmation phrase did not match.';
+    return;
+  }
+  const button=$('delete-book');
+  button.disabled=true;
+  try {
+    await deleteBook(id,target.state.revision,confirmation);
+    try {
+      const key='translation-reader:draft-help-book';
+      if(window.localStorage.getItem(key)===id)window.localStorage.removeItem(key);
+    } catch {}
+    libraryRefresh++;
+    bookCards.get(id)?.card.remove();
+    bookCards.delete(id);
+    if(organization===target)$('volumes-dialog').close();
+    message(`Deleted “${title}”.`);
+    await renderLibrary();
+  } catch(error) {
+    if(organization===target&&$('volumes-dialog').open)$('volumes-error').textContent=error.message;
+    else message(error.message,true);
+  } finally {
+    button.disabled=false;
+  }
 };
 $('volumes-form').onsubmit=async e=>{
   e.preventDefault();$('save-volumes').disabled=true;

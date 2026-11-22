@@ -1,0 +1,7 @@
+.site-icon{width:28px;height:28px;object-fit:contain;vertical-align:middle}
+.site-corner{position:fixed;right:12px;bottom:12px;width:24px;height:24px;
+  opacity:.65;pointer-events:none}
+.reader-site-corner{bottom:36px}
+.book-card-icon{width:44px;height:44px;object-fit:contain;flex:none}
+.book-card-heading{display:flex;gap:10px;align-items:flex-start}
+.book-card-heading h2{min-width:0}

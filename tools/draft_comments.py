@@ -280,6 +280,7 @@ function commentPassageStillMatches(){
   document.getElementById('comment-message').textContent='The selected text changed. Select it again to attach this comment.';
   return false;
 }
+commentField.addEventListener('input',recordEdit);
 commentForm.addEventListener('submit',e=>{
   e.preventDefault();
   const field=document.getElementById('comment-text'), text=field.value.trim();

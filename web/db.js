@@ -12,6 +12,9 @@ async function api(path, method = 'GET', body) {
 }
 export const listBooks = () => api('books');
 export const getBook = id => api('books/' + encodeURIComponent(id));
+export const setBookIcon = (id, icon) => api('books/' + encodeURIComponent(id) + '/icon', 'PUT', {icon});
+export const deleteBook = (id, expectedRevision, confirmation) =>
+  api('books/' + encodeURIComponent(id), 'DELETE', {expectedRevision, confirmation});
 export const getState = async id => ({...local.emptyState(id),...await api('books/' + encodeURIComponent(id) + '/state')});
 export async function importBooks(entries) {
   for (const {book,state} of entries) { local.validateBook(book); if (state) local.validateState(state,book); }

@@ -4,18 +4,28 @@ window.readerStart = async function(config, startOriginal) {
   const enableEditors=enabled=>{document.querySelectorAll('textarea').forEach(el=>el.disabled=!enabled);document.querySelectorAll('[contenteditable]').forEach(el=>el.contentEditable=String(enabled))};
   enableEditors(false);
   const status=document.createElement('div');status.id='reader-server-status';status.setAttribute('role','status');
-  document.body.prepend(status);
+  const toolbar=document.querySelector('header');
+  const draft=config.mode==='draft';
+  const compactStatus=toolbar.hasAttribute('data-save-state');
   const recovery=document.createElement('button');recovery.textContent='Download recovery backup';
-  recovery.hidden=config.mode==='draft';
+  recovery.hidden=draft;
   const key='original-reader-pending:'+config.id;
   const offlineCopy=config.mode==='draft'?window.readerOffline?.(config.id):null;
   let state,book,revision,memory={},pending=false,blocked=false,saving=false,timer,generation=0,suppress=false,batchDepth=0,batchChanged=false;
   let offline=false,conflicted=false,recoveryValue=null;
   const defaults={italics:{},comments:{},drafts:{},positions:{},offsets:{},alignmentGroups:{},times:{},current:null,fontSize:19,smart:false,sync:true,wordsPerPage:null,reviewEnglish:{},reviewMode:'chapter',reviewFontSize:19,legacyStorage:{}};
-  const show=(text,error=false)=>{
+  const saveLabels={saved:'Saved',saving:'Saving',offline:'Offline',error:'Save error'};
+  const show=(text,error=false,phase='saved')=>{
     status.textContent=text;
     status.classList.toggle('error',error);
-    if(config.mode==='draft')recovery.hidden=!error||!book;
+    if(draft)recovery.hidden=!error||!book;
+    if(compactStatus){
+      toolbar.dataset.saveState=error&&(!offline||blocked||!book)?'error':offline?'offline':phase;
+      summary.setAttribute('aria-label',`${saveLabels[toolbar.dataset.saveState]} · Save status`);
+      detail.textContent=summary.title=text;
+      retry.hidden=!error||!pending||blocked;
+      if(error&&(blocked||!book))menu.open=true;
+    }
     useServer.hidden=!conflicted;
   };
   async function request(path,method='GET',body,withRelease=false) {
@@ -62,7 +72,7 @@ window.readerStart = async function(config, startOriginal) {
   function queue() {
     if(batchDepth){batchChanged=true;return}
     pending=true;generation++;
-    if(!blocked)show(offline?'Offline. Saving on this device.':'Saving to server…');
+    if(!blocked)show(offline?'Offline. Saving on this device.':'Saving to server…',false,'saving');
     recover();
     clearTimeout(timer);timer=setTimeout(save,400);
   }
@@ -123,13 +133,34 @@ window.readerStart = async function(config, startOriginal) {
   };
   const offlineStatus=document.createElement('span');offlineStatus.id='reader-offline-status';
   offlineStatus.textContent='Available offline';offlineStatus.hidden=true;
-  const bar=document.createElement('div');bar.style.cssText='padding:4px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px';bar.append(recovery,useServer,retry,offlineStatus);status.after(bar);
+  const bar=document.createElement('div');
+  const menu=document.createElement('details');
+  const summary=document.createElement('summary');
+  const detail=document.createElement('p');
+  if(compactStatus){
+    menu.id='reader-save-menu';
+    menu.className='reader-menu';
+    menu.append(summary,bar);
+    bar.append(detail);
+    toolbar.append(menu,status);
+  }else{
+    document.body.prepend(status);
+    bar.style.cssText='padding:4px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:8px';
+    status.after(bar);
+  }
+  bar.append(recovery,useServer,retry,offlineStatus);
   if(config.version){
     const versionLabel=document.createElement('small');
     versionLabel.textContent='v'+config.version;
-    versionLabel.style.marginInlineStart='auto';
-    bar.append(versionLabel);
+    if(compactStatus){
+      versionLabel.className='reader-version';
+      toolbar.append(versionLabel);
+    }else{
+      versionLabel.style.marginInlineStart='auto';
+      bar.append(versionLabel);
+    }
   }
+  if(compactStatus)show('Opening reader…',false,'saving');
   try {
     let data;
     try {data=await request('books/'+config.id+'/bundle');}
@@ -201,7 +232,7 @@ window.readerStart = async function(config, startOriginal) {
           if(Object.keys(drafts).some(n=>snapshot().drafts[n]?.trim()))replace=confirm('Replace matching existing drafts? Cancel imports into empty chapters only.');
           if(replace)backup();const existing=snapshot().drafts;
           window.readerInstallDrafts(Object.fromEntries(Object.entries(drafts).filter(([n])=>replace||!existing[n]?.trim())));
-          show('Draft text imported; syncing…');
+          show('Draft text imported; syncing…',false,'saving');
         }catch(e){show(e.message,true)}
       };input.click();
     };

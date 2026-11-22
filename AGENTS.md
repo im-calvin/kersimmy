@@ -23,6 +23,19 @@ first draft added through **Add manuscript** in that browser. Replay it under
 the user switches it with the sun or moon under **View** in the draft. Dark mode
 uses beige reading text.
 
+The whole library card opens the draft. **Settings** opens the book-specific actions.
+Use **Book settings** for the book icon, book backup, import recheck, and chapter
+titles and volumes. Keep deletion under **Remove book**. It requires typing
+`I am an idiot sandwich` exactly and checks the current book revision.
+
+In the draft, **View** contains the Word comment author, and **Exports** contains
+Word export with native comments, Google Docs copy, and draft and project
+backups. **Stats** shows the automatically recorded project time. Version-1 JSON
+backups store chapter times in `state.times`. Find searches the whole book,
+starting with the source for queries containing Han characters and the
+translation for other queries. It checks the other side when the first side
+yields no results and reports both occurrences and matching paragraphs.
+
 The hosted glossary is browser-local per book. Underlined Chinese terms show
 their English translation and usage note on hover or keyboard focus. Google
 Sheets integration and public glossary sharing remain deferred.
@@ -95,12 +108,18 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
 - `tools/build_web.py`: copies library/adapter assets to generated `dist/`;
   optionally bundles the current source and original file reader as `legacy/`.
 - `tools/serve.py`: build library assets, then launch the Python reader service.
-- `web/index.html`, `library.js`, `style.css`: simple library/import form.
+- `web/index.html`, `web/library.js`, `web/style.css`: library, import preview,
+  and book settings. The 10-second library poll updates cards by book ID in
+  place. Preserve focus and open settings during polling.
+- `web/site-icon.png`, `web/site-brand.css`: site branding shared by the library
+  and hosted reader, including the favicon. Keep the offline asset list current.
 - `web/db.js`: server API and migration client. `web/local-db.js` remains for
   earlier IndexedDB library migration/backup validation only.
 - `web/reader-storage.js`: maps original reader storage fields to SQLite,
   pending local recovery, retry, clean-page sync, GIF controls and text import.
   Do not implement editor/search/statistics algorithms here; change templates.
+- `web/reader-worker.js`, `web/reader-offline.js`: hosted draft caching and
+  IndexedDB storage for offline reloads.
 - `web/dialogs.js`: native library-dialog backdrop dismissal.
 - `web/glossary-poc.js` and `web/glossary-poc.css`: hosted glossary editor, source
   marking, and definition tooltip. Glossary data uses browser storage.
@@ -126,7 +145,7 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
 | Review text and scroll synchronization | `tools/build_sync.py` | Check file output and hosted review page |
 | Hosted template injection or navigation | `tools/reader_server.py` (`generated_page`) | Restart service; check injected controls/hooks |
 | Recovery, save/retry, remote refresh | `web/reader-storage.js` | Rebuild static assets; check persistence and conflicts |
-| Library/import UI and migration | `web/library.js`, `web/db.js`, other `web/` assets | Rebuild static assets; check import/restore |
+| Library, book settings, import, and migration | `web/index.html`, `web/library.js`, `web/db.js` | Rebuild static assets; check settings, polling, and import/restore |
 | Database validation, transactions, snapshots | `tools/reader_store.py`, API handler | Run storage tests and relevant API/UI checks |
 
 Hosted integration uses literal replacements and script hooks in generated HTML.
@@ -193,19 +212,24 @@ JSON state, revision) and version-1 JSON backups. Every book imported through
 JSON restore or migration gets an independent UUID; offline SQLite snapshot
 restore preserves the stored IDs. Do not discard existing SQLite or browser
 data during edits.
-Volume assignments on existing books use `/api/books/<id>/volumes` with an
-expected revision; they must never renumber chapters or replace translation state.
+Volume and title edits on existing books use `/api/books/<id>/volumes` with an
+expected revision. Preserve chapter keys and translation state. Import recheck
+uses `/api/books/<id>/chapter-import` to apply titles and volume metadata only
+when the chapter IDs, order, and source paragraphs still match. Import a
+separate book when the source or chapter boundaries change.
 New imports with numbering restarted across volumes get distinct numeric keys and
 preserve their original displayed numbers. Version-1 backups retain both fields.
 The fourth corpus row item optionally holds this metadata; keep the first three
 items compatible with old generated readers.
 
-Server book records include complete source and optional GIF data URLs. State
+Server book records include complete source, optional GIF data URLs, and an
+optional `book.icon` PNG data URL up to 128 × 128 pixels. The library icon and
+the reader GIF are independent and both are included in JSON backups. State
 holds drafts, italic ranges, passage comments, positions, offsets, alignment
 groups, times, font size, page size, review text/settings, and legacy storage
-values. Image updates are separate from frequent state writes. Theme,
-walkthrough dismissal, and the hosted glossary stay in browser
-storage. The Word comment author is saved with the book.
+values. Chapter timings are stored in milliseconds. Image updates are separate
+from frequent state writes. Theme, walkthrough dismissal, and the hosted glossary
+stay in browser storage. The Word comment author is saved with the book.
 
 Generated hosted pages use an in-memory `readerStorage` adapter with the original
 key conventions. The file reader continues to use its actual localStorage keys.
@@ -216,20 +240,24 @@ JSON restore and browser-library migration remain available in the library.
 Revision-checked SQLite writes reject conflicting edits. Pending work gets local
 recovery before a server write; preserve this recovery if saving fails. Clean
 pages poll and refresh on remote changes; unsaved/review-editor content blocks
-refresh. The hosted draft can reload offline after it shows **Available offline**.
+refresh. The hosted draft can reload offline after the toolbar status menu shows
+**Available offline**. Keep retry and recovery actions accessible from that menu.
 `web/reader-worker.js` caches its page and assets, and `web/reader-offline.js`
 stores the book and confirmed draft state in IndexedDB. Keep the original
 revision with pending edits across reloads so the server can reject conflicts.
+The library and manuscript import require a connection. On conflict, the
+reader offers a JSON recovery backup or lets the user reload the server copy.
 Hosted smart punctuation is disabled;
 SOURCE and YOUR TRANSLATION labels remain absent. Preserve requested backdrop
 closing and per-book GIF customization when updating generated page integration.
 
 ## Backups and deployment
 
-Release identity is separate from persisted data versions. GHCR images report
-the commit SHA and local builds report a source fingerprint. Clean hosted tabs
-reload after detecting a different release. Protect pending edits, open dialogs,
-and active imports from automatic reloads.
+`APP_VERSION` in `tools/reader_server.py` is the displayed product version.
+`/api/status` reports the product version and release identity. GHCR images
+report the commit SHA and local builds report a source fingerprint. Clean hosted
+tabs reload after detecting a different release. Protect pending edits, open
+dialogs, and active imports from automatic reloads.
 
 SQLite uses WAL/FULL commits on local disk. Automatic snapshots use SQLite's
 online backup API, integrity checks, temporary files/atomic rename, and bounded
@@ -253,8 +281,11 @@ reporting it as live.
 Arcane Compose mounts an external volume at `/data`. Create the default
 `kersimmy` volume once, or use `READER_DATA_VOLUME` to
 reuse an existing volume. `READER_HOST_PORT` overrides the published loopback
-port. Arcane Git Pull sync uses `main` and `compose.arcane.yaml`. Confirm
-that the Compose file and workflow are pushed before relying on remote deploys.
+port. The configured update path is Arcane Git Pull sync every five minutes
+for `main` and `compose.arcane.yaml`, with the optional webhook job disabled.
+For an unchanged Compose file tracking `:latest`, use Arcane's Image Update
+Watcher and Auto Update to pick up a new image.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment and rollback procedures.
 
 The workspace is a Git checkout tracking `main` on `im-calvin/kersimmy`.
 Check `git status` and the remote branch before reporting what has shipped.
@@ -279,8 +310,11 @@ a disposable hosted server automatically; no real manuscript or database is used
 The shared reader tests cover walkthrough and theme settings. Alignment and
 editing tests live in `tests/test_editor.py`. `tests/test_comments.py` checks
 rendered highlight pixels and native DOCX comment ranges, formatting, and
-authors. `tests/test_glossary_poc.py` checks glossary tooltips. Failure traces
-and screenshots go to `test-results/`.
+authors. `tests/test_glossary_poc.py` checks glossary tooltips, `tests/test_volumes.py`
+covers import and book settings, and `tests/test_vocabulary.py` covers Find.
+Run `.venv/bin/python tests/release_compatibility.py --previous-ref <ref>` against
+the previous production release when changing persistence or release handling.
+Failure traces and screenshots go to `test-results/`.
 
 ```sh
 python3 -m unittest discover -s tests -p server_test.py

@@ -137,6 +137,16 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     book_id = response.json()[0]['id']
     page.goto(base + '/books/' + book_id + '/draft')
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
+    header = page.locator('header')
+    save_menu = page.locator('#reader-save-menu summary')
+    expect(header).to_have_attribute('data-save-state', 'saved')
+    expect(save_menu).to_have_attribute('aria-label', 'Saved · Save status')
+    indicator_fill = '(el) => getComputedStyle(el, "::before").backgroundColor'
+    assert save_menu.evaluate(indicator_fill) != 'rgba(0, 0, 0, 0)'
+    assert header.bounding_box()['y'] == 0
+    assert header.bounding_box()['height'] <= 48
+    expect(page.get_by_role('button', name='Retry save')).to_be_hidden()
+    save_menu.click()
     expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
     page.context.set_offline(True)
     try:
@@ -147,6 +157,12 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
         select(page, 4, 8)
         page.locator('#ta').press('ControlOrMeta+i')
         expect(page.locator('#reader-server-status')).to_contain_text('Connection lost')
+        expect(header).to_have_attribute('data-save-state', 'offline')
+        expect(save_menu).to_have_attribute('aria-label', 'Offline · Save status')
+        assert save_menu.evaluate(indicator_fill) == 'rgba(0, 0, 0, 0)'
+        expect(page.get_by_role('button', name='Retry save')).to_be_hidden()
+        save_menu.click()
+        expect(page.get_by_role('button', name='Retry save')).to_be_visible()
         expect(page.get_by_role('button', name='Download recovery backup')).to_be_visible()
         recovery = page.evaluate("id=>JSON.parse(localStorage.getItem('original-reader-pending:'+id))", book_id)
         assert recovery['state']['italics']['1'] == [{'start': 4, 'end': 8}]
@@ -184,6 +200,8 @@ def test_offline_conflict_never_rebases_pending_changes_on_reload(page, reader_e
     book_id = response.json()[0]['id']
     state_url = f'{base}/api/books/{book_id}/state'
     page.goto(f'{base}/books/{book_id}/draft')
+    save_menu = page.locator('#reader-save-menu summary')
+    save_menu.click()
     expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
     page.context.set_offline(True)
     page.locator('#ta').fill('My offline draft.')
@@ -196,6 +214,7 @@ def test_offline_conflict_never_rebases_pending_changes_on_reload(page, reader_e
     page.context.set_offline(False)
     use_server = page.get_by_role('button', name='Use server version', exact=True)
     expect(use_server).to_be_visible()
+    expect(save_menu).to_have_attribute('aria-label', 'Save error · Save status')
     # The previous release could write a newer outer revision while leaving
     # the pending draft tied to its original revision inside the saved state.
     page.evaluate('''([id,revision])=>{
@@ -210,6 +229,7 @@ def test_offline_conflict_never_rebases_pending_changes_on_reload(page, reader_e
         expect(page.locator('#ta')).to_have_js_property('value', 'My offline draft.')
         assert page.request.get(state_url).json()['drafts']['1'] == 'Other device draft.'
     assert project(page)['state']['drafts']['1'] == 'My offline draft.'
+    save_menu.click()
     page.once('dialog', lambda dialog: dialog.accept())
     use_server.click()
     expect(page.locator('#ta')).to_have_js_property('value', 'Other device draft.')

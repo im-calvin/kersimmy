@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import build_draft
 import build_sync
-from reader_store import Store, validate
+from reader_store import Store, validate, validate_icon
 from chapter_structure import VOLUME_HEADING_REGEX
 from tlconfig import DEFAULTS, parse_source, read_source
 
@@ -32,7 +32,7 @@ def reader_release():
     if re.fullmatch(r'[0-9a-f]{40}', release):
         return release
     digest = hashlib.sha256()
-    for directory, suffixes in (('tools', {'.py'}), ('web', {'.js', '.css', '.html'})):
+    for directory, suffixes in (('tools', {'.py'}), ('web', {'.js', '.css', '.html', '.png'})):
         for path in sorted((ROOT / directory).iterdir()):
             if path.suffix in suffixes and path.is_file():
                 digest.update(path.name.encode())
@@ -119,7 +119,7 @@ def generated_page(book, mode):
         page = re.sub(r'(?<!\.)\blocalStorage\b', 'readerStorage', page)
         page = page.replace("let smart=readerStorage.getItem(SKEY)!=='0';",'let smart=false;')
         page = re.sub(r'<button id="sq".*?</button>', '<button id="sq" hidden></button>',page,flags=re.S)
-        page = page.replace('<header>','<header><a href="/">← Library</a><button type="button" id="open-glossary">Glossary</button>')
+        page = page.replace('<header>','<header data-save-state="saving"><a href="/">← Library</a><button type="button" id="open-glossary">Glossary</button>')
         page = page.replace('</head>', '<link rel="stylesheet" href="/glossary-poc.css"></head>')
         page = page.replace('onclick="fullProjectBackup()"','onclick="window.readerBackup()"')
         page = page.replace('<div class="cards" id="cards"></div>','<section id="artwork"><img id="project-gif" alt="Project GIF" hidden><div><button id="choose-gif">Choose GIF</button><button id="remove-gif">Remove GIF</button><input id="gif-file" type="file" accept=".gif,image/gif" hidden><p id="gif-status" role="status"></p></div></section><div class="cards" id="cards"></div>')
@@ -166,7 +166,35 @@ def generated_page(book, mode):
               'version':APP_VERSION,'release':reader_release()}
     page = page[:start] + offline + '<script src="/reader-storage.js"></script><script>window.readerStart(' + json.dumps(config) + ',()=>{const script=document.createElement("script");script.textContent=' + code + ';document.body.append(script)});</script>' + page[end+9:]
     extra = '''<style>[hidden]{display:none!important}header{height:auto;min-height:44px;flex-wrap:wrap;padding:8px 12px}header a{font:13px sans-serif;color:var(--heading);text-decoration:none;margin-right:12px}#wrap{flex:1;min-height:0;height:auto}body{display:flex;flex-direction:column}#find,#stats{position:fixed;inset:0;background:var(--scrim);padding:5vh 5vw;z-index:40}#find.on{display:flex}#find>.top,#find>#verdict,#find>#hits,#stats>.top,#stats>.body{background:var(--bg);padding:12px 22px}#stats{width:100%;max-height:none;border:0;border-radius:0;box-shadow:none}#stats>.top,#stats>.body{width:min(760px,100%);margin:0 auto}#stats>.top{border-radius:12px 12px 0 0}#stats>.body{border-radius:0 0 12px 12px;padding-bottom:30px}#artwork{display:flex;flex-wrap:wrap;align-items:center;gap:24px;margin:0 0 22px}#project-gif{width:150px;height:150px;object-fit:contain}#reader-server-status{font:12px sans-serif;padding:6px 12px;background:var(--status-bg);color:var(--status)}#reader-server-status.error{color:var(--error);background:var(--error-bg)}</style>'''
-    return page.replace('</head>',extra+'</head>')
+    if mode == 'draft':
+        extra += '''<style>
+header[data-save-state]{--save-color:var(--status);background:var(--status-bg)}
+header[data-save-state="saving"]{
+  --save-color:var(--accent);background:var(--accent-soft)}
+header[data-save-state="offline"]{--save-color:var(--heading);background:var(--control)}
+header[data-save-state="error"]{--save-color:var(--error);background:var(--error-bg)}
+header #reader-server-status{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap}
+#reader-save-menu summary{display:grid;place-items:center;width:24px;height:24px;
+  border-radius:4px;list-style:none;color:var(--save-color)}
+#reader-save-menu summary::-webkit-details-marker{display:none}
+#reader-save-menu summary::before{content:"";box-sizing:border-box;width:10px;height:10px;
+  border:2px solid currentColor;border-radius:50%}
+header[data-save-state="saved"] #reader-save-menu summary::before{background:currentColor}
+@media(forced-colors:active){
+  #reader-save-menu summary::before{forced-color-adjust:none;color:ButtonText}
+}
+#reader-save-menu summary:hover{background:var(--hover)}
+#reader-save-menu>div{width:min(19rem,calc(100vw - 2rem));display:grid;gap:.4rem;
+  border-radius:6px;padding:.65rem;color:var(--ink)}
+#reader-save-menu p{margin:0}
+#reader-save-menu button{text-align:left;color:var(--ink)}
+#reader-offline-status,.reader-version{color:var(--dim);font-size:11px}
+</style>'''
+    brand = '<link rel="icon" href="/site-icon.png" type="image/png"><link rel="stylesheet" href="/site-brand.css">'
+    page = page.replace('>← Library</a>', '><img class="site-icon" src="/site-icon.png" alt=""> Library</a>', 1)
+    return page.replace('</head>',brand+extra+'</head>').replace(
+        '</body>', '<img class="site-corner reader-site-corner" src="/site-icon.png" alt=""></body>', 1)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -224,6 +252,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self): self.mutate()
     def do_PUT(self): self.mutate()
+    def do_DELETE(self): self.mutate()
 
     def mutate(self):
         origin=self.headers.get('Origin')
@@ -242,6 +271,20 @@ class Handler(SimpleHTTPRequestHandler):
             if self.command=='POST' and path=='/api/import':return self.reply(self.store.import_entries(data['books']),201)
             if self.command=='POST' and path=='/api/backup':return self.reply({'backup':self.store.backup()})
             parts=path.split('/')
+            if self.command=='DELETE' and len(parts)==4 and parts[1:3]==['api','books']:
+                if data.get('confirmation') != 'I am an idiot sandwich':
+                    raise ValueError('The confirmation phrase did not match.')
+                expected = data.get('expectedRevision')
+                if type(expected) is not int:
+                    raise ValueError('A book revision is required.')
+                with self.store.connect() as db:
+                    db.execute('BEGIN IMMEDIATE')
+                    row = db.execute('SELECT revision FROM books WHERE id=?', (parts[3],)).fetchone()
+                    if not row: return self.reply({'error':'Book not found'},404)
+                    if expected != row[0]:
+                        return self.reply({'error':'This book changed. Check the latest version before deleting it.','conflict':True},409)
+                    db.execute('DELETE FROM books WHERE id=?', (parts[3],))
+                return self.reply({'deleted':True})
             if self.command!='PUT' or len(parts)!=5 or parts[2]!='books':return self.reply({'error':'Not found'},404)
             with self.store.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
@@ -255,7 +298,7 @@ class Handler(SimpleHTTPRequestHandler):
                     db.execute('UPDATE books SET state=?,revision=? WHERE id=?',(json.dumps(state),revision+1,parts[3]));result={'revision':revision+1}
                 elif parts[4] in ('volumes','chapter-import'):
                     if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:
-                        return self.reply({'error':'This book changed. Reopen Edit chapters to load the latest version.','conflict':True},409)
+                        return self.reply({'error':'This book changed. Reopen book settings to load the latest version.','conflict':True},409)
                     if parts[4]=='chapter-import':
                         preview = data['preview']
                         chapters = preview['chapters']
@@ -305,6 +348,11 @@ class Handler(SimpleHTTPRequestHandler):
                     from reader_store import validate_image
                     book['illustration']=validate_image(data.get('illustration'))
                     db.execute('UPDATE books SET book=? WHERE id=?',(json.dumps(book),parts[3]));result=book
+                elif parts[4]=='icon':
+                    icon = validate_icon(data['icon'])
+                    book['icon'] = icon
+                    db.execute('UPDATE books SET book=? WHERE id=?',(json.dumps(book),parts[3]))
+                    result = {'icon': icon}
                 else:return self.reply({'error':'Not found'},404)
             self.reply(result)
         except subprocess.TimeoutExpired:self.reply({'error':'Parsing took too long. Simplify the heading pattern.'},400)

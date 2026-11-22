@@ -1,5 +1,6 @@
 """Passage anchors and actual Word package contents in both reader modes."""
 import base64
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -83,6 +84,30 @@ def word_passages(document):
             passages[identity] += '\n'
     assert not active
     return passages
+
+
+def test_comment_composition_counts_toward_chapter_time(reader):
+    page = reader['page']
+    page.locator('#ta').fill('Moonlight')
+    saved(reader)
+    page.reload()
+    select(page, 0, len('Moonlight'))
+    page.get_by_role('button', name='Add comment', exact=True).click()
+    field = page.locator('#comment-text')
+    start = datetime.now(timezone.utc)
+    page.clock.set_fixed_time(start)
+    field.fill('Check')
+    page.clock.set_fixed_time(start + timedelta(minutes=1))
+    field.fill('Check this')
+    page.clock.set_fixed_time(start + timedelta(minutes=6))
+    field.fill('Check this term.')
+    expect(page.locator('#rt')).to_contain_text('4m')
+
+    page.get_by_role('button', name='save comment', exact=True).click()
+    saved(reader)
+    page.reload()
+    page.get_by_role('button', name='stats', exact=True).click()
+    expect(page.locator('#cards')).to_contain_text('4m')
 
 
 def test_comment_anchor_save_word_and_backup(reader):
@@ -244,6 +269,7 @@ def test_hosted_comment_offline_recovery(page, reader_environment):
     book_id = response.json()[0]['id']
     page.goto(base + '/books/' + book_id + '/draft')
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
+    page.locator('#reader-save-menu summary').click()
     expect(page.get_by_text('Available offline', exact=True)).to_be_visible()
     page.context.set_offline(True)
     try:
@@ -468,7 +494,7 @@ def test_library_keeps_comments_and_drafts_separate_between_manuscripts(page, re
 
     def open_book(title):
         card = page.get_by_role('article').filter(has=page.get_by_role('heading', name=title, exact=True))
-        card.get_by_role('link', name='Continue translating').click()
+        card.get_by_role('link', name=f'Continue {title}', exact=True).click()
 
     open_book(first)
     expect(editor).to_have_js_property('value', 'Moonlight at dusk.')

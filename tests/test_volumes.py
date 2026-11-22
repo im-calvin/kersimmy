@@ -139,7 +139,7 @@ def test_docx_volume_preview_import_and_restore(page, reader_environment, source
     expect(page.locator('#preview-text')).not_to_contain_text('Volume 2')
     page.locator('#confirm-import').click()
     card = page.locator('.book-card').filter(has=page.get_by_role('heading', name=title, exact=True))
-    expect(card).to_contain_text('2 VOLUMES')
+    expect(card).to_contain_text('3 chapters')
     card.get_by_role('link').click()
     entry = project(page)
     assert entry['book']['chapters'][1]['title'] == '新的标题'
@@ -148,7 +148,7 @@ def test_docx_volume_preview_import_and_restore(page, reader_environment, source
     expect(page.locator('#message')).to_contain_text('Restored 1 book')
     cards = page.locator('.book-card').filter(has=page.get_by_role('heading', name=title, exact=True))
     expect(cards).to_have_count(2)
-    expect(cards.nth(0)).to_contain_text('2 VOLUMES')
+    expect(cards.nth(0)).to_contain_text('3 chapters')
 
 
 def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page, reader_environment):
@@ -162,7 +162,7 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     book_id = response.json()[0]['id']
     page.goto(base)
     card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Organize existing', exact=True))
-    card.get_by_role('button', name='Edit chapters', exact=True).click()
+    card.get_by_role('button', name='Settings', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
     page.locator('#select-all-chapters').check()
     page.locator('#volume-name').fill('First volume <safe>')
@@ -175,7 +175,7 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     page.locator('#save-volumes').click()
     expect(page.locator('#volumes-error')).to_contain_text('This book changed')
     page.locator('#cancel-volumes').click()
-    card.get_by_role('button', name='Edit chapters', exact=True).click()
+    card.get_by_role('button', name='Settings', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
     page.get_by_role('textbox', name='Chapter 1', exact=True).fill('New title <safe>')
     page.locator('#volume-chapters input[data-chapter="1"]').check()
@@ -266,7 +266,7 @@ def test_recheck_import_updates_titles_only_when_source_matches(page, reader_env
     endpoint = base + '/api/books/' + created.json()[0]['id']
     page.goto(base)
     card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Rechecked book', exact=True))
-    card.get_by_role('button', name='Edit chapters', exact=True).click()
+    card.get_by_role('button', name='Settings', exact=True).click()
     page.get_by_role('button', name='Recheck import').click()
     page.locator('#manuscript').set_input_files({
         'name': 'manuscript.txt', 'mimeType': 'text/plain', 'buffer': '第1章 新标题\n改动内容。'.encode(),
@@ -290,3 +290,101 @@ def test_recheck_import_updates_titles_only_when_source_matches(page, reader_env
     after = page.request.get(endpoint + '/bundle').json()
     assert after['book']['chapters'] == [{**original, 'title': '新标题'}]
     assert after['state'] == {**before['state'], 'revision': 1}
+
+
+def test_delete_book_requires_confirmation_and_current_revision(page, reader_environment):
+    base = reader_environment['base']
+    created = page.request.post(base + '/api/import', data={'books': [{
+        'book': {'title': 'Disposable deletion test', 'chapters': reader_environment['chapters']},
+        'state': {'drafts': {'1': 'Saved draft.'}},
+    }]})
+    assert created.status == 201
+    endpoint = base + '/api/books/' + created.json()[0]['id']
+    page.goto(base)
+    card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Disposable deletion test'))
+    expect(card.get_by_role('button', name='Delete book', exact=True)).to_have_count(0)
+    dialog = page.get_by_role('dialog', name='Book settings')
+    delete = dialog.get_by_role('button', name='Delete book', exact=True)
+    card.get_by_role('button', name='Settings', exact=True).click()
+    expect(delete).to_be_hidden()
+    dialog.get_by_text('Remove book', exact=True).click()
+
+    page.once('dialog', lambda dialog: dialog.dismiss())
+    delete.click()
+    expect(card).to_be_visible()
+    assert page.request.get(endpoint).ok
+
+    page.once('dialog', lambda dialog: dialog.accept('wrong phrase'))
+    delete.click()
+    expect(page.locator('#volumes-error')).to_contain_text('The confirmation phrase did not match.')
+    assert page.request.get(endpoint).ok
+
+    state = page.request.get(endpoint + '/state').json()
+    updated = page.request.put(endpoint + '/state', data={'state': state, 'expectedRevision': state['revision']})
+    assert updated.ok
+    rejected = page.request.delete(endpoint, data={'expectedRevision': updated.json()['revision']})
+    assert rejected.status == 400
+    page.once('dialog', lambda dialog: dialog.accept('I am an idiot sandwich'))
+    delete.click()
+    expect(page.locator('#volumes-error')).to_contain_text('This book changed')
+    assert page.request.get(endpoint).ok
+
+    page.reload()
+    card.get_by_role('button', name='Settings', exact=True).click()
+    dialog.get_by_text('Remove book', exact=True).click()
+    page.once('dialog', lambda dialog: dialog.accept('I am an idiot sandwich'))
+    delete.click()
+    expect(card).to_have_count(0)
+    expect(page.locator('#message')).to_contain_text('Deleted')
+    assert page.request.get(endpoint).status == 404
+
+
+def test_book_icon_and_library_refresh_keep_the_same_card(page, reader_environment):
+    base = reader_environment['base']
+    created = page.request.post(base + '/api/import', data={'books': [{
+        'book': {'title': 'TTEOTM (English drafts for Chapters 2–6)', 'chapters': reader_environment['chapters']},
+    }]})
+    assert created.ok
+    book_id = created.json()[0]['id']
+    page.clock.install()
+    page.goto(base)
+    expect(page.locator('link[rel=icon]')).to_have_attribute('href', 'site-icon.png')
+    expect(page.locator('.wordmark .site-icon')).to_be_visible()
+    expect(page.locator('.intro')).to_have_count(0)
+    card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='TTEOTM', exact=True))
+    expect(card).to_contain_text('2 chapters')
+    expect(card).not_to_contain_text('source paragraphs')
+    settings = card.get_by_role('button', name='Settings', exact=True)
+    settings.click()
+    dialog = page.get_by_role('dialog', name='Book settings')
+    choose = dialog.get_by_role('button', name='Set book icon')
+    with page.expect_file_chooser() as chooser:
+        choose.click()
+    chooser.value.set_files(ROOT / 'web' / 'site-icon.png')
+    expect(page.locator('#book-settings-status')).to_have_text('Book icon saved.')
+    image = card.locator('.book-card-icon')
+    expect(image).to_be_visible()
+    icon = image.get_attribute('src')
+    assert icon.startswith('data:image/png;base64,')
+    exported = page.request.get(base + '/api/export').json()
+    assert next(entry for entry in exported['books'] if entry['book']['id'] == book_id)['book']['icon'] == icon
+    with page.expect_download() as backup:
+        dialog.get_by_role('button', name='Back up book').click()
+    assert json.loads(Path(backup.value.path()).read_text())['books'][0]['book']['icon'] == icon
+    dialog.get_by_role('button', name='Close', exact=True).click()
+    settings.focus()
+    settings.evaluate('button => { window.originalSettingsButton = button }')
+
+    endpoint = f'{base}/api/books/{book_id}/state'
+    state = page.request.get(endpoint).json()
+    state['drafts']['1'] = 'Remote draft.'
+    assert page.request.put(endpoint, data={'state': state, 'expectedRevision': state['revision']}).ok
+    page.clock.fast_forward(10000)
+    expect(card.get_by_role('link')).to_have_text('Continue')
+    assert settings.evaluate('button => button === window.originalSettingsButton')
+    expect(settings).to_be_focused()
+    expect(image).to_have_attribute('src', icon)
+
+    card.click(position={'x': 12, 'y': 12})
+    expect(page.locator('link[rel=icon]')).to_have_attribute('href', '/site-icon.png')
+    expect(page.locator('.reader-site-corner')).to_be_visible()

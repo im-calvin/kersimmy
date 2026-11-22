@@ -130,9 +130,6 @@ a{
 }
 .masthead-options{display:flex;align-items:center;gap:16px}
 .masthead .theme-toggle{font-size:20px;line-height:1;width:32px;height:32px;padding:0}
-.intro{
-  padding:64px 0 28px
-}
 .eyebrow{
   letter-spacing:.16em;
   font-size:10px;
@@ -140,18 +137,7 @@ a{
   color:var(--accent);
   margin:0 0 16px
 }
-.intro h1{
-  font-family:Georgia,"Times New Roman",serif;
-  font-size:clamp(30px,4vw,48px);
-  line-height:1.15;
-  font-weight:400;
-  margin:0 0 18px;
-  letter-spacing:-1.4px
-}
-.intro>p:last-child{
-  color:var(--muted);
-  font-size:16px
-}
+.library-actions{margin-top:24px}
 .library-actions,.actions,.card-actions,.dialog-actions{
   display:flex;
   gap:10px;
@@ -194,26 +180,23 @@ a{
   color:var(--muted)
 }
 .book-card{
+  position:relative;
   border:1px solid var(--line);
   border-top:4px solid var(--hover-line);
   border-radius:9px;
   padding:28px 24px 20px;
   background:var(--surface);
-  min-height:210px;
+  min-height:166px;
   display:flex;
   flex-direction:column
 }
+.book-card:has(.book-link:hover){border-color:var(--hover-line)}
 .book-card h2{
   font-family:Georgia,"Songti SC",serif;
   font-size:27px;
   font-weight:400;
   margin:2px 0 14px;
   overflow-wrap:anywhere
-}
-.book-meta{
-  font-size:12px;
-  color:var(--muted);
-  line-height:1.6
 }
 .card-actions{
   margin-top:auto;
@@ -225,6 +208,10 @@ a{
   text-decoration:none;
   font-weight:600
 }
+.book-link::after{content:"";position:absolute;inset:0;border-radius:8px}
+.book-link:focus-visible{outline:0}
+.book-link:focus-visible::after{outline:2px solid var(--focus);outline-offset:3px}
+.card-actions button{position:relative;z-index:1}
 .current-project{
   margin-top:32px;
   padding:24px 28px;
@@ -360,7 +347,7 @@ input[type=file]{
   margin-top:24px
 }
 
-@media(max-width:760px){.library{padding:0 22px}.masthead{padding:22px 0}.device-label{display:none}.intro{padding-top:40px}.fields{grid-template-columns:1fr}.current-project{align-items:start;flex-direction:column}.preview-top{display:block}}
+@media(max-width:760px){.library{padding:0 22px}.masthead{padding:22px 0}.device-label{display:none}.fields{grid-template-columns:1fr}.current-project{align-items:start;flex-direction:column}.preview-top{display:block}}
 
 .volume-controls{display:flex;gap:12px;align-items:end;margin:18px 0}
 .volume-controls label{flex:1;margin:0}

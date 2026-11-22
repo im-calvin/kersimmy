@@ -129,9 +129,8 @@ button.act{border:1px solid var(--line);background:var(--control)}
   border-bottom:1px solid var(--line);font-size:13px;color:var(--dim)}
 #stats .top b{color:var(--ink);font-size:14px}
 #stats .top .sp{flex:1}
-#wpp,#chapter-minutes{width:5rem;font:inherit;color:var(--ink);border:1px solid var(--line);
+#wpp{width:5rem;font:inherit;color:var(--ink);border:1px solid var(--line);
   border-radius:5px;padding:.25rem .4rem;background:var(--control);text-align:right}
-#chapter-time-form{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.7rem 0}
 #stats .body{flex:1;overflow-y:auto;padding:1rem}
 .cards{display:grid;gap:.6rem;padding-bottom:1.1rem;
   grid-template-columns:repeat(3,1fr)}
@@ -200,13 +199,16 @@ function commit(){
     w.textContent='storage full — copy this chapter into Docs now';
   }
 }
+function recordEdit(){
+  dirty=true; ind.classList.add('dirty'); ind.textContent='unsaved…';
+  bumpTime(); count(); clearTimeout(timer); timer=setTimeout(commit,400);
+}
 function touch(){
   clearReadingHighlight();
   trackFormatting();
   trackCommentEdits();
   drawCommentHighlights();
-  dirty=true; ind.classList.add('dirty'); ind.textContent='unsaved…';
-  bumpTime(); count(); clearTimeout(timer); timer=setTimeout(commit,400);
+  recordEdit();
   tick(false);
 }
 function sizeCheck(){
@@ -737,21 +739,11 @@ function setWpp(){
   const v=Math.max(50,Math.min(1000,+document.getElementById('wpp').value||__WPP__));
   localStorage.setItem(WKEY,v); renderStats();
 }
-function saveChapterTime(event){
-  event.preventDefault();
-  const milliseconds=document.getElementById('chapter-minutes').valueAsNumber*60000;
-  if(!Number.isSafeInteger(milliseconds)||milliseconds<0)return;
-  times[cur]=milliseconds;
-  lastIn=0;
-  localStorage.setItem(TKEY,JSON.stringify(times));
-  count();renderStats();
-}
 function renderStats(){
   if(dirty)commit();
   const bodies=allBodies();
   const wpp=+localStorage.getItem(WKEY)||__WPP__;
   document.getElementById('wpp').value=wpp;
-  document.getElementById('chapter-minutes').value=Math.round((times[cur]||0)/60000);
 
   /* totals */
   let wTotal=0, cjk=0;
@@ -1164,10 +1156,6 @@ PAGE = """<!DOCTYPE html>
   <div class="body">
     <div class="cards" id="cards"></div>
     <div id="bar"></div>
-    <form id="chapter-time-form" onsubmit="saveChapterTime(event)">
-      <label>Current chapter time (minutes) <input id="chapter-minutes" type="number" min="0" step="1" required></label>
-      <button type="submit" class="act">Save time</button>
-    </form>
   </div>
 </div>
 <script src="corpus.js"></script>

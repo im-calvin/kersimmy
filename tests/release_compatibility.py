@@ -1,6 +1,7 @@
 """Check a previous release, the working tree, and rollback on disposable data."""
 import argparse
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 import io
 import json
 import os
@@ -134,7 +135,9 @@ def check_release(previous_ref):
                 expect(reader.get_by_text(f'v{version}', exact=True)).to_be_visible()
                 expect(reader.locator('#ta')).to_have_js_property('value', PENDING)
                 expect(reader.locator('#reader-server-status')).to_have_text('Synced to server')
+                reader.locator('#reader-save-menu summary').click()
                 expect(reader.get_by_text('Available offline', exact=True)).to_be_visible()
+                reader.locator('#reader-save-menu summary').click()
                 expect(reader.locator('#ta em')).to_have_text('moon')
                 upgraded = client.request.get(endpoint + '/bundle').json()
                 assert upgraded['book']['chapters'] == book['chapters']
@@ -155,11 +158,17 @@ def check_release(previous_ref):
                     expect(reader.locator('#reader-server-status')).to_have_text('Synced to server')
                     expect(reader.locator('#ta')).to_have_js_property('value', PENDING)
                     assert client.request.get(base + '/api/status').json()['release'] == 'b' * 40
-                    reader.get_by_role('button', name='stats', exact=True).click()
-                    reader.get_by_label('Current chapter time (minutes)').fill('10')
-                    reader.get_by_role('button', name='Save time').click()
+                    editor = reader.locator('#ta')
+                    editor.evaluate('el => { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }')
+                    start = datetime.now(timezone.utc)
+                    reader.clock.set_fixed_time(start)
+                    editor.press_sequentially('!')
+                    reader.clock.set_fixed_time(start + timedelta(minutes=1))
+                    editor.press('Backspace')
+                    expect(editor).to_have_js_property('value', PENDING)
                     expect(reader.locator('#reader-server-status')).to_have_text('Synced to server')
-                    assert client.request.get(endpoint + '/state').json()['times'] == {'2': 600000}
+                    updated_times = {'2': pending_state['times']['2'] + 60000}
+                    assert client.request.get(endpoint + '/state').json()['times'] == updated_times
 
             with serve(previous, old_site, data, port, '', log):
                 reader.reload()
@@ -167,7 +176,7 @@ def check_release(previous_ref):
                 expect(reader.locator('#ta em')).to_have_text('moon')
                 rolled_back = client.request.get(endpoint + '/bundle').json()
                 assert rolled_back['book']['chapters'] == book['chapters']
-                assert rolled_back['state']['times'] == {'2': 600000}
+                assert rolled_back['state']['times'] == updated_times
                 for key in ('comments', 'alignmentGroups', 'reviewEnglish', 'commentAuthor'):
                     assert rolled_back['state'][key] == state[key], key
         print(f'Passed {previous_ref} → working tree → new release → {previous_ref}')
