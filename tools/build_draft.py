@@ -813,6 +813,14 @@ function stamp(){
   return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())
     +'-'+p(d.getHours())+p(d.getMinutes());
 }
+/* Book backups are named after the book title and local time, to the second,
+   so folder snapshots never overwrite each other. */
+function backupFileName(title,date){
+  const d=date||new Date(), p=x=>String(x).padStart(2,'0');
+  const name=String(title||'').replace(/[^\p{L}\p{N}_-]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,70)||'book';
+  return name+'_'+d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())
+    +'_'+p(d.getHours())+'-'+p(d.getMinutes())+'-'+p(d.getSeconds())+'.json';
+}
 function backup(){
   if(dirty)commit();
   const nums=Object.keys(store).map(Number)
@@ -865,7 +873,7 @@ function fullProjectBackup(){
   const data=projectSnapshot();
   if(!data)return;
   const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-  const a=document.createElement('a');a.href=url;a.download='__SLUG__-book-backup-'+stamp()+'.json';a.click();
+  const a=document.createElement('a');a.href=url;a.download=backupFileName(data.books[0].book.title,new Date(data.exportedAt));a.click();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
   ind.textContent='book backup saved — use Restore backup in the web library';
 }
@@ -896,9 +904,7 @@ async function writeProjectSnapshot(){
   try{
     const data=window.readerSnapshot?window.readerSnapshot():projectSnapshot();
     if(!data)throw new Error('Keep corpus.js beside the reader to make snapshots.');
-    const timestamp=data.exportedAt.replace(/[:.]/g,'-');
-    const prefix=data.books[0].book.id||'__SLUG__';
-    const file=await directory.getFileHandle(prefix+'-snapshot-'+timestamp+'.json',{create:true});
+    const file=await directory.getFileHandle(backupFileName(data.books[0].book.title,new Date(data.exportedAt)),{create:true});
     writer=await file.createWritable();
     await writer.write(JSON.stringify(data));
     await writer.close();

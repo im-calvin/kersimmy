@@ -4,6 +4,7 @@ import base64
 import hashlib
 import html
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from functools import cache, partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -24,6 +26,33 @@ from tlconfig import DEFAULTS, parse_source, read_source
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_VERSION = '0.1'
+log = logging.getLogger('kersimmy')
+SAVE_LOG_SECONDS = 300
+
+
+class SaveActivity:
+    """Log draft saves at most once per book every few minutes."""
+    def __init__(self, interval=SAVE_LOG_SECONDS):
+        self.interval = interval
+        self.lock = threading.Lock()
+        self.books = {}
+
+    def record(self, id, title, revision):
+        now = time.monotonic()
+        with self.lock:
+            last, count = self.books.get(id, (None, 0))
+            count += 1
+            if last is not None and now - last < self.interval:
+                self.books[id] = (last, count)
+                return
+            self.books[id] = (now, 0)
+        if last is None or count == 1:
+            log.info('Saved "%s" (revision %d)', title, revision)
+        else:
+            log.info('Saved "%s" (revision %d, %d saves in %d min)', title, revision, count, round((now - last) / 60))
+
+
+SAVES = SaveActivity()
 
 
 @cache
@@ -190,6 +219,11 @@ header[data-save-state="saved"] #reader-save-menu summary::before{background:cur
 #reader-save-menu p{margin:0}
 #reader-save-menu button{text-align:left;color:var(--ink)}
 #reader-offline-status,.reader-version{color:var(--dim);font-size:11px}
+/* Read-only mode: hide controls that change the book. */
+:root[data-read-only] :is(#comment-add,#comment-form,#save-comment,#comments-dialog .comment button,
+  #reattach-comments,#italic,[onclick="resetAlign()"],#choose-gif,#remove-gif,[onclick="window.readerImportDrafts()"],label:has(#comment-author)){display:none!important}
+:root[data-read-only] #ta{caret-color:transparent}
+header[data-save-state="readonly"] #reader-save-menu summary::before{border-style:dashed}
 </style>'''
     brand = '<link rel="icon" href="/site-icon.png" type="image/png"><link rel="stylesheet" href="/site-brand.css">'
     page = page.replace('>← Library</a>', '><img class="site-icon" src="/site-icon.png" alt=""> Library</a>', 1)
@@ -201,6 +235,9 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,store,**kwargs):
         self.store=store
         super().__init__(*args,**kwargs)
+
+    def log_message(self, format, *args):
+        log.debug('%s %s', self.address_string(), format % args)
 
     def end_headers(self):
         self.send_header('Cache-Control','no-store')
@@ -234,6 +271,8 @@ class Handler(SimpleHTTPRequestHandler):
             if len(parts)==4 and parts[1]=='books' and parts[3] in ('draft','review'):
                 entry=self.get_entry(parts[2])
                 if not entry: return self.reply({'error':'Book not found'},404)
+                if self.headers.get('Sec-Fetch-Dest') in (None, 'document'):  # skip offline-cache fetches
+                    log.info('Opened %s: "%s"', parts[3], entry[0]['title'])
                 return self.content(generated_page(entry[0],parts[3]).encode(),'text/html; charset=utf-8')
             if not path.startswith('/api/'): return super().do_GET()
             if path=='/api/status':
@@ -248,7 +287,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply({'book':entry[0],'state':entry[1]} if parts[-1]=='bundle' else entry[1] if parts[-1]=='state' else entry[0])
             self.reply({'error':'Not found'},404)
         except Exception as error:
-            print('Read failed:',error,flush=True);self.reply({'error':'Could not load the book'},500)
+            log.exception('Read failed for %s', path);self.reply({'error':'Could not load the book'},500)
 
     def do_POST(self): self.mutate()
     def do_PUT(self): self.mutate()
@@ -267,9 +306,18 @@ class Handler(SimpleHTTPRequestHandler):
                 # Isolate custom regex parsing and Word extraction with a hard timeout.
                 result=subprocess.run([sys.executable,__file__,'--parse'],input=json.dumps(data),capture_output=True,text=True,timeout=15)
                 if result.returncode:raise ValueError(result.stderr.strip() or 'Could not parse manuscript')
-                return self.reply(json.loads(result.stdout))
-            if self.command=='POST' and path=='/api/import':return self.reply(self.store.import_entries(data['books']),201)
-            if self.command=='POST' and path=='/api/backup':return self.reply({'backup':self.store.backup()})
+                preview=json.loads(result.stdout)
+                log.info('Previewed upload "%s": %d chapters', data.get('name',''), len(preview.get('chapters',[])))
+                return self.reply(preview)
+            if self.command=='POST' and path=='/api/import':
+                books=self.store.import_entries(data['books'])
+                self.store.changed()
+                log.info('Imported %d book%s: %s', len(books), '' if len(books)==1 else 's', ', '.join('"%s"' % b['title'] for b in books))
+                return self.reply(books,201)
+            if self.command=='POST' and path=='/api/backup':
+                name=self.store.backup()
+                log.info('Library snapshot written on request: %s', name)
+                return self.reply({'backup':name})
             parts=path.split('/')
             if self.command=='DELETE' and len(parts)==4 and parts[1:3]==['api','books']:
                 if data.get('confirmation') != 'I am an idiot sandwich':
@@ -279,11 +327,14 @@ class Handler(SimpleHTTPRequestHandler):
                     raise ValueError('A book revision is required.')
                 with self.store.connect() as db:
                     db.execute('BEGIN IMMEDIATE')
-                    row = db.execute('SELECT revision FROM books WHERE id=?', (parts[3],)).fetchone()
+                    row = db.execute('SELECT revision, book FROM books WHERE id=?', (parts[3],)).fetchone()
                     if not row: return self.reply({'error':'Book not found'},404)
                     if expected != row[0]:
+                        log.warning('Removal refused for "%s": the book changed', json.loads(row[1])['title'])
                         return self.reply({'error':'This book changed. Check the latest version before deleting it.','conflict':True},409)
                     db.execute('DELETE FROM books WHERE id=?', (parts[3],))
+                self.store.changed()
+                log.info('Removed book "%s"', json.loads(row[1])['title'])
                 return self.reply({'deleted':True})
             if self.command!='PUT' or len(parts)!=5 or parts[2]!='books':return self.reply({'error':'Not found'},404)
             with self.store.connect() as db:
@@ -292,12 +343,16 @@ class Handler(SimpleHTTPRequestHandler):
                 if not row:return self.reply({'error':'Book not found'},404)
                 book,state,revision=json.loads(row[0]),json.loads(row[1]),row[2]
                 if parts[4]=='state':
-                    if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:return self.reply({'error':'This book changed on another device. Your local changes are still here.','conflict':True},409)
+                    if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:
+                        log.warning('Save conflict on "%s": tab had revision %s, server has %d', book['title'], data.get('expectedRevision'), revision)
+                        return self.reply({'error':'This book changed on another device. Your local changes are still here.','conflict':True},409)
                     state=data['state'];validate(book,state)
                     state=dict(state,id=parts[3],revision=revision+1)
                     db.execute('UPDATE books SET state=?,revision=? WHERE id=?',(json.dumps(state),revision+1,parts[3]));result={'revision':revision+1}
+                    event=lambda: SAVES.record(parts[3],book['title'],revision+1)
                 elif parts[4] in ('volumes','chapter-import'):
                     if type(data.get('expectedRevision')) is not int or data['expectedRevision']!=revision:
+                        log.warning('Settings conflict on "%s": the book changed', book['title'])
                         return self.reply({'error':'This book changed. Reopen book settings to load the latest version.','conflict':True},409)
                     if parts[4]=='chapter-import':
                         preview = data['preview']
@@ -349,21 +404,30 @@ class Handler(SimpleHTTPRequestHandler):
                     db.execute('UPDATE books SET book=?,state=?,revision=? WHERE id=?',
                                (json.dumps(book),json.dumps(state),revision+1,parts[3]))
                     result = {'book':book,'revision':revision+1}
+                    action = 'Rechecked chapter import for' if parts[4]=='chapter-import' else 'Updated book settings for'
+                    event=lambda: log.info('%s "%s"', action, book['title'])
                 elif parts[4]=='illustration':
                     from reader_store import validate_image
                     book['illustration']=validate_image(data.get('illustration'))
                     db.execute('UPDATE books SET book=? WHERE id=?',(json.dumps(book),parts[3]));result=book
+                    event=lambda: log.info('%s reader image for "%s"', 'Updated' if book['illustration'] else 'Removed', book['title'])
                 elif parts[4]=='icon':
                     icon = validate_icon(data['icon'])
                     book['icon'] = icon
                     db.execute('UPDATE books SET book=? WHERE id=?',(json.dumps(book),parts[3]))
                     result = {'icon': icon}
+                    event=lambda: log.info('%s library icon for "%s"', 'Updated' if icon else 'Removed', book['title'])
                 else:return self.reply({'error':'Not found'},404)
+            self.store.changed();event()
             self.reply(result)
-        except subprocess.TimeoutExpired:self.reply({'error':'Parsing took too long. Simplify the heading pattern.'},400)
-        except (ValueError,KeyError,TypeError,AttributeError) as error:self.reply({'error':str(error)},400)
-        except Exception as error:
-            print('Save failed:',error,flush=True);self.reply({'error':'Could not save. Keep your recovery backup.'},500)
+        except subprocess.TimeoutExpired:
+            log.warning('Upload preview timed out after 15 seconds')
+            self.reply({'error':'Parsing took too long. Simplify the heading pattern.'},400)
+        except (ValueError,KeyError,TypeError,AttributeError) as error:
+            log.warning('Rejected %s %s: %s', self.command, urlparse(self.path).path, error)
+            self.reply({'error':str(error)},400)
+        except Exception:
+            log.exception('Save failed for %s %s', self.command, urlparse(self.path).path);self.reply({'error':'Could not save. Keep your recovery backup.'},500)
 
 
 def main():
@@ -376,6 +440,8 @@ def main():
     parser.add_argument('--data',default=os.environ.get('READER_DATA',str(ROOT/'data')))
     parser.add_argument('--site',default=str(ROOT/'dist'))
     args=parser.parse_args()
+    logging.basicConfig(level=os.environ.get('LOG_LEVEL','INFO').upper(),stream=sys.stdout,
+                        format='%(asctime)s %(levelname)-7s %(message)s',datefmt='%Y-%m-%d %H:%M:%S')
     store=Store(args.data,int(os.environ.get('BACKUP_INTERVAL_SECONDS','300')),
                 int(os.environ.get('BACKUP_KEEP','96')),
                 portable_json=os.environ.get('PORTABLE_JSON_SNAPSHOTS')=='1')
@@ -384,8 +450,13 @@ def main():
     def shutdown(signum,frame):
         stop.set();threading.Thread(target=server.shutdown,daemon=True).start()
     signal.signal(signal.SIGTERM,shutdown);signal.signal(signal.SIGINT,shutdown)
-    print(f'Original Python reader: http://{args.host}:{args.port} · {store.path}',flush=True)
+    log.info('Kersimmy %s (release %s) on http://%s:%d', APP_VERSION, reader_release()[:12], args.host, args.port)
+    log.info('Library: %d books in %s', len(store.entries()), store.path)
+    log.info('Server snapshots every %s, keeping the newest %d, in %s',
+             f'{store.interval // 60} min' if store.interval % 60 == 0 else f'{store.interval} s', store.keep, store.backups)
     try:server.serve_forever()
-    finally:stop.set();server.server_close();store.backup()
+    finally:
+        stop.set();server.server_close()
+        log.info('Stopped. Final snapshot: %s', store.backup())
 
 if __name__=='__main__':main()

@@ -9,6 +9,7 @@ services:
       BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-300}"
       PORTABLE_JSON_SNAPSHOTS: "${PORTABLE_JSON_SNAPSHOTS:-1}"
       BACKUP_KEEP: "96"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     read_only: true
     tmpfs:
       - /tmp:mode=1777

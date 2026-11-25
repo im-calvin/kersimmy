@@ -129,6 +129,9 @@ a{
   color:var(--muted)
 }
 .masthead-options{display:flex;align-items:center;gap:16px}
+.masthead .read-only-toggle{flex-direction:row;align-items:center;gap:6px;margin:0;font-size:13px;font-weight:500;color:var(--ink);cursor:pointer;white-space:nowrap}
+.read-only-toggle input{margin:0;width:16px;height:16px;accent-color:var(--accent)}
+:root[data-read-only] .edit-only{display:none!important}
 .masthead .theme-toggle{font-size:20px;line-height:1;width:32px;height:32px;padding:0}
 .eyebrow{
   letter-spacing:.16em;

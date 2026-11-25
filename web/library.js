@@ -15,6 +15,27 @@ async function exportBooks(books) {
   download(`${books.length === 1 ? filename(books[0].title) : 'library'}-${stamp()}.json`, JSON.stringify(backupPayload(entries), null, 2));
   message('Backup downloaded. Restore it here or on another device to continue.');
 }
+// Read-only mode is a per-browser choice. Drafts opened here never save.
+const READ_ONLY_KEY = 'kersimmy-read-only';
+function readOnlyMode() { try { return window.localStorage.getItem(READ_ONLY_KEY) === '1'; } catch { return false; } }
+function applyReadOnly() {
+  const on = readOnlyMode();
+  $('read-only').checked = on;
+  document.documentElement.toggleAttribute('data-read-only', on);
+}
+applyReadOnly();
+$('read-only').onchange = () => {
+  try {
+    if ($('read-only').checked) window.localStorage.setItem(READ_ONLY_KEY, '1');
+    else window.localStorage.removeItem(READ_ONLY_KEY);
+  } catch { message('This browser could not save the read-only setting.', true); }
+  applyReadOnly();
+  message(readOnlyMode()
+    ? 'Read-only is on in this browser. Books open for reading, and nothing is saved to the server.'
+    : 'Read-only is off. Books open for editing.');
+  renderLibrary().catch(() => {});
+};
+addEventListener('storage', event => { if (event.key === READ_ONLY_KEY) { applyReadOnly(); renderLibrary().catch(() => {}); } });
 const bookCards = new Map();
 let libraryRefresh = 0;
 
@@ -46,7 +67,7 @@ function createBookCard(id) {
   const actions = element('div', '', 'card-actions');
   const link = element('a', '', 'book-link');
   link.href = `/books/${encodeURIComponent(id)}/draft`;
-  const settings = element('button', 'Settings', 'subtle');
+  const settings = element('button', 'Settings', 'subtle edit-only');
   settings.onclick = async () => {
     settings.disabled = true;
     try { await openBookSettings(id); } catch (error) { message(error.message, true); }
@@ -62,7 +83,7 @@ function createBookCard(id) {
     const labels = [
       [counts, `${chapterCount} ${chapterCount === 1 ? 'chapter' : 'chapters'}`],
       [title, displayTitle],
-      [link, drafted ? 'Continue' : 'Open manuscript'],
+      [link, readOnlyMode() ? 'Read' : drafted ? 'Continue' : 'Open manuscript'],
     ];
     for (const [node, text] of labels) if (node.textContent !== text) node.textContent = text;
     link.setAttribute('aria-label', `${link.textContent} ${displayTitle}`);
@@ -400,7 +421,7 @@ if (serverMode) {
   );
   versionLabel.hidden = true;
   const actions = document.querySelector('.library-actions');
-  const migrate = element('button','Import browser library');
+  const migrate = element('button','Import browser library','edit-only');
   migrate.onclick = async () => {
     migrate.disabled = true;
     try { const books = await migrateBrowserLibrary(); await renderLibrary(); message(books.length ? `Copied ${books.length} browser books to the server. Original browser copies are kept.` : 'No books in this browser. Use Restore backup to import a JSON export from your old address.'); }

@@ -13,6 +13,7 @@ services:
     environment:
       BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-300}"
       BACKUP_KEEP: "${BACKUP_KEEP:-96}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     read_only: true
     tmpfs:
       - /tmp:mode=1777

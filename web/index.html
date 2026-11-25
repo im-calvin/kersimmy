@@ -5,13 +5,14 @@
 <main class="library">
   <header class="masthead"><a class="wordmark" href="./"><img class="site-icon" src="site-icon.png" alt=""> Kersimmy</a>
     <div class="masthead-options"><span class="device-label">Your words, your workspace</span>
+      <label class="read-only-toggle" title="Books open for reading only in this browser"><input type="checkbox" id="read-only" role="switch"> Read-only</label>
       <button type="button" class="theme-toggle" aria-label="Switch theme">☾</button>
     </div>
   </header>
-  <div class="library-actions"><button class="primary" id="add-book">＋ Add manuscript</button><button id="restore">Restore backup</button><button id="backup-library">Back up library</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
+  <div class="library-actions"><button class="primary edit-only" id="add-book">＋ Add manuscript</button><button class="edit-only" id="restore">Restore backup</button><button id="backup-library">Back up library</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
   <p id="message" role="status" aria-live="polite"></p>
   <section id="books" class="book-grid" aria-label="Your books"></section>
-  <section id="current-project" class="current-project" hidden><div><p class="eyebrow">FROM YOUR LOCAL READER</p><h2 id="current-title">Current manuscript</h2><p>Bring the source into your library.</p></div><div class="actions"><button id="import-current">Add to library</button><a id="original-reader" class="button subtle" href="legacy/index.html" hidden>Original reader ↗</a></div></section>
+  <section id="current-project" class="current-project edit-only" hidden><div><p class="eyebrow">FROM YOUR LOCAL READER</p><h2 id="current-title">Current manuscript</h2><p>Bring the source into your library.</p></div><div class="actions"><button id="import-current">Add to library</button><a id="original-reader" class="button subtle" href="legacy/index.html" hidden>Original reader ↗</a></div></section>
   <footer><p>Books and drafts are saved in SQLite on your server, with automatic backups.</p></footer>
 </main>
 <img class="site-corner" src="site-icon.png" alt="">

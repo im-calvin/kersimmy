@@ -3,6 +3,33 @@
 window.readerStart = async function(config, startOriginal) {
   const enableEditors=enabled=>{document.querySelectorAll('textarea').forEach(el=>el.disabled=!enabled);document.querySelectorAll('[contenteditable]').forEach(el=>el.contentEditable=String(enabled))};
   enableEditors(false);
+  // Read-only mode is a per-browser choice made in the library. It never sends
+  // state to the server; only this reader's place is kept, in this browser.
+  const readOnly=(()=>{try{return window.localStorage.getItem('kersimmy-read-only')==='1'}catch{return false}})();
+  if(readOnly)document.documentElement.dataset.readOnly='';
+  const viewKey='kersimmy-read-only-view:'+config.id;
+  const viewSuffixes=['draft:cur','draft:pos','draft:off','draft:fs','draft:wpp','draft:sync','sync:mode','sync:fs'];
+  function rememberView(){
+    const view=Object.fromEntries(viewSuffixes.map(suffix=>[suffix,memory[config.prefix+suffix]]).filter(([,value])=>value!==undefined));
+    try{window.localStorage.setItem(viewKey,JSON.stringify(view))}catch{}
+  }
+  function restoreView(){
+    let view;
+    try{view=JSON.parse(window.localStorage.getItem(viewKey)||'null')}catch{}
+    if(!view||typeof view!=='object')return;
+    for(const suffix of viewSuffixes)if(typeof view[suffix]==='string')memory[config.prefix+suffix]=view[suffix];
+    if(!book.chapters.some(c=>String(c.no)===memory[config.prefix+'draft:cur']))memory[config.prefix+'draft:cur']=String(book.chapters[0].no);
+  }
+  if(readOnly){
+    // Block editing shortcuts and alignment gestures before the template sees them.
+    document.addEventListener('keydown',e=>{
+      const key=e.key.toLowerCase();
+      if((e.metaKey||e.ctrlKey)&&(key==='i'||(e.shiftKey&&e.code==='KeyM'))){e.preventDefault();e.stopImmediatePropagation()}
+    },true);
+    for(const type of ['mousedown','click'])document.addEventListener(type,e=>{
+      if((e.altKey||e.shiftKey)&&e.target.closest?.('#cn'))e.stopImmediatePropagation();
+    },true);
+  }
   const status=document.createElement('div');status.id='reader-server-status';status.setAttribute('role','status');
   const toolbar=document.querySelector('header');
   const draft=config.mode==='draft';
@@ -14,7 +41,7 @@ window.readerStart = async function(config, startOriginal) {
   let state,book,revision,memory={},pending=false,blocked=false,saving=false,timer,generation=0,suppress=false,batchDepth=0,batchChanged=false;
   let offline=false,conflicted=false,recoveryValue=null;
   const defaults={italics:{},comments:{},drafts:{},positions:{},offsets:{},alignmentGroups:{},times:{},current:null,fontSize:19,smart:false,sync:true,wordsPerPage:null,reviewEnglish:{},reviewMode:'chapter',reviewFontSize:19,legacyStorage:{}};
-  const saveLabels={saved:'Saved',saving:'Saving',offline:'Offline',error:'Save error'};
+  const saveLabels={saved:'Saved',saving:'Saving',offline:'Offline',error:'Save error',readonly:'Read-only'};
   const show=(text,error=false,phase='saved')=>{
     status.textContent=text;
     status.classList.toggle('error',error);
@@ -70,6 +97,7 @@ window.readerStart = async function(config, startOriginal) {
     if(recoveryValue!==null&&localStorage.getItem(key)===recoveryValue)localStorage.removeItem(key);
   }
   function queue() {
+    if(readOnly){rememberView();return}
     if(batchDepth){batchChanged=true;return}
     pending=true;generation++;
     if(!blocked)show(offline?'Offline. Saving on this device.':'Saving to server…',false,'saving');
@@ -118,7 +146,9 @@ window.readerStart = async function(config, startOriginal) {
   };
   const backup=()=>{
     const data=backupData();
-    download('reader-recovery-'+data.exportedAt.replace(/[:.]/g,'-')+'.json',data);
+    const d=new Date(data.exportedAt), pad=x=>String(x).padStart(2,'0');
+    const title=String(book.title||'').replace(/[^\p{L}\p{N}_-]+/gu,'-').replace(/^-+|-+$/g,'').slice(0,70)||'book';
+    download(title+'_'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'_'+pad(d.getHours())+'-'+pad(d.getMinutes())+'-'+pad(d.getSeconds())+'.json',data);
   };
   window.readerBackup=backup;
   if(draft)window.readerSnapshot=backupData;
@@ -182,7 +212,8 @@ window.readerStart = async function(config, startOriginal) {
         .catch(()=>{offlineStatus.textContent='Offline copy unavailable';offlineStatus.hidden=false;});
     }
     const serverRevision=state.revision||0;
-    recoveryValue=localStorage.getItem(key);
+    // Read-only pages leave any earlier pending edits untouched for edit mode.
+    if(!readOnly)recoveryValue=localStorage.getItem(key);
     const saved=JSON.parse(recoveryValue||'null');
     revision=saved?saved.revision:serverRevision;
     if(saved){
@@ -194,11 +225,13 @@ window.readerStart = async function(config, startOriginal) {
       blocked=conflicted;
     }
     populate();
+    if(readOnly)restoreView();
     window.CORPUS=book.chapters.map(c=>[c.no,c.title,c.paras,{...(c.volume?{volume:c.volume}:{}),...('number' in c?{number:c.number}:{})}]);
     suppress=true;await startOriginal();suppress=false;
-    enableEditors(true);
-    document.title=book.title+' · '+(config.mode==='review'?'Review':'Draft');
-    if(conflicted)show('This book changed on another device. Your local changes are still here.',true);
+    enableEditors(!readOnly);
+    document.title=book.title+' · '+(readOnly?'Read-only':config.mode==='review'?'Review':'Draft');
+    if(readOnly)show('Read-only. Nothing on this page is saved to the server. Turn off read-only mode in the Library to edit.',false,'readonly');
+    else if(conflicted)show('This book changed on another device. Your local changes are still here.',true);
     else if(offline){offlineStatus.hidden=false;show('Offline. Changes are saved on this device.');}
     else if(saved)save();
     else show('Synced to server');
@@ -206,7 +239,7 @@ window.readerStart = async function(config, startOriginal) {
     // original 400 ms debounce window without replacing original editor logic.
     const editor=document.getElementById('ta');
     if(config.mode==='draft')editor.addEventListener('input',()=>{window.readerCommit?.()});
-    if(config.mode==='review') {
+    if(config.mode==='review'&&!readOnly) {
       const use=document.createElement('button');use.textContent='use current drafts';
       use.onclick=async()=>{
         if(Object.values(state.reviewEnglish||{}).some(t=>t.trim())){if(!await window.readerDialogs.confirm('Replace review text with current drafts? A recovery backup will be downloaded first.','Replace review text'))return;backup();}
@@ -220,11 +253,12 @@ window.readerStart = async function(config, startOriginal) {
     if(file){
       renderGIF();
       document.getElementById('choose-gif').onclick=()=>file.click();
-      const update=async image=>{book=await request('books/'+config.id+'/illustration','PUT',{illustration:image});renderGIF();document.getElementById('gif-status').textContent=image?'GIF saved with this book.':'GIF removed.';};
+      const update=async image=>{if(readOnly)return;book=await request('books/'+config.id+'/illustration','PUT',{illustration:image});renderGIF();document.getElementById('gif-status').textContent=image?'GIF saved with this book.':'GIF removed.';};
       file.onchange=async()=>{try{const {readIllustration}=await import('/illustration.js');await update(await readIllustration(file.files[0]));}catch(e){document.getElementById('gif-status').textContent=e.message;}finally{file.value=''}};
       document.getElementById('remove-gif').onclick=()=>update(null).catch(e=>{document.getElementById('gif-status').textContent=e.message});
     }
     window.readerImportDrafts=()=>{
+      if(readOnly)return;
       const input=document.createElement('input');input.type='file';input.accept='.txt';
       input.onchange=async()=>{
         try {

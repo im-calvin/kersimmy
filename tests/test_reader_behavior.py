@@ -1,6 +1,7 @@
 """The original file reader is the reference for shared editor behavior."""
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from pathlib import Path
 
 from playwright.sync_api import expect
@@ -312,6 +313,8 @@ def test_draft_writes_local_snapshots_every_five_minutes(reader):
     page.wait_for_function('snapshots.length === 2')
     first, second = page.evaluate('snapshots')
     assert first['name'] != second['name']
+    for snapshot in (first, second):
+        assert re.fullmatch(r'Test-manuscript_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.json', snapshot['name'])
     assert first['data']['books'][0]['state']['drafts']['1'] == DRAFT
     assert second['data']['version'] == 1
     assert second['data']['books'][0]['state']['drafts']['1'] == 'A newer draft.'
@@ -330,6 +333,7 @@ def test_draft_offers_backup_without_folder_access(reader):
     expect(menu.locator('#snapshot-status')).to_contain_text('Use Back up book')
     with page.expect_download() as download:
         menu.get_by_role('button', name='Back up book', exact=True).click()
+    assert re.fullmatch(r'Test-manuscript_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.json', download.value.suggested_filename)
     payload = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
     assert payload['version'] == 1
     assert payload['books'][0]['book']['chapters']

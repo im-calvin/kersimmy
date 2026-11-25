@@ -30,7 +30,9 @@ uses beige reading text.
 The whole library card opens the draft. **Settings** opens the book-specific actions.
 Use **Book settings** for the book name, icon, backup, import recheck, and chapter
 titles and volumes. Keep deletion under **Remove book**. It requires typing
-`I am an idiot sandwich` exactly and checks the current book revision.
+`I am an idiot sandwich` in the inline confirmation and checks the current
+book revision. Use the shared in-app dialogs for confirmations. Keep keyboard
+focus inside modal dialogs and restore it to the opener on dismissal.
 
 In the draft, **View** contains the Word comment author, and **Exports** contains
 Word export with native comments, Google Docs copy, and draft text and book
@@ -39,6 +41,15 @@ backups store chapter times in `state.times`. Find searches the whole book,
 starting with the source for queries containing Han characters and the
 translation for other queries. It checks the other side when the first side
 yields no results and reports both occurrences and matching paragraphs.
+
+The **Read-only** switch on the library page is a per-browser setting
+(`kersimmy-read-only` in browser storage). In that browser, library cards say
+**Read**, and import, restore and book settings are hidden. Hosted drafts open
+with the editor locked and editing controls hidden. They never send state to
+the server and leave pending recovery edits untouched. The reader's chapter,
+scroll and display settings stay in that browser, and remote saves still
+refresh the page. It prevents accidents only; the server does not enforce it.
+`tests/test_read_only.py` covers it.
 
 The hosted glossary is browser-local per book. Underlined Chinese terms show
 their English translation and usage note on hover or keyboard focus. Google
@@ -164,7 +175,8 @@ Draft alignment counts paragraphs, skipping blank lines and the leading chapter
 heading. Option/Alt-click sets alignment and Shift-click extends the current
 Chinese range in either direction. Holding Option/Alt with Shift also extends it.
 Reject overlaps silently. Ordinary source clicks show the corresponding English
-without changing the saved alignment.
+without changing the saved alignment. The bottom-right indicator follows the
+pane order, for example `中文 1–2 ↔ EN 1`.
 
 ## Existing local project
 
@@ -252,7 +264,8 @@ stores the book and confirmed draft state in IndexedDB. Keep the original
 revision with pending edits across reloads so the server can reject conflicts.
 The library and manuscript import require a connection. On conflict, the
 reader offers a JSON recovery backup or lets the user reload the server copy.
-Hosted smart quotes are disabled. Typing two hyphens inserts an em dash.
+Typing `--` inserts an em dash in the hosted draft. Hosted smart quotes are
+disabled. The file reader's smart punctuation toggle controls both replacements.
 SOURCE and YOUR TRANSLATION labels remain absent. Preserve requested backdrop
 closing and per-book GIF customization when updating generated page integration.
 
@@ -266,11 +279,31 @@ dialogs, and active imports from automatic reloads.
 
 SQLite uses WAL/FULL commits on local disk. Automatic snapshots use SQLite's
 online backup API, integrity checks, temporary files/atomic rename, and bounded
-retention (five minutes / newest 96 by default). The draft can also write
-restorable JSON to a browser-selected folder while the tab stays open.
-Never copy a live WAL database
-as a plain file. Restore requires the app stopped. Snapshots in the same Docker
-volume do not protect against host/disk loss; external replication is separate.
+retention. The default schedule is five minutes with the newest 96 snapshots
+retained. Override the server interval with `BACKUP_INTERVAL_SECONDS`. For a
+one-minute local Docker test, set it to `60` when running Compose. Snapshots
+live under `/data/backups/` in Docker. Copy completed snapshots to another
+machine for protection against host or disk loss. Stop the app before a SQLite
+restore and use SQLite's backup API when copying a live database.
+
+The server logs events to stdout through the `kersimmy` logger. Keep the
+default `INFO` level readable: log startup settings, opened pages, imports,
+settings changes, removals, conflicts, rejected writes, errors, and automatic
+snapshots that follow changes. Draft saves are throttled to one line per book
+every five minutes. Routine HTTP requests, polls, and unchanged snapshots are
+`DEBUG` only. `LOG_LEVEL` sets the level in Compose.
+
+**Back up library** downloads all books as version-1 JSON. **Snapshot library
+on server** writes a whole-library SQLite snapshot. In a draft, **Exports →
+Back up book** downloads that book, and **Choose book backup folder** writes
+that book's JSON immediately and at the chosen interval while the tab stays
+open. The browser interval defaults to five minutes and accepts one minute
+independently of the server setting. Hosted book snapshots include pending
+draft edits from the open tab. A reload requires choosing the folder again.
+Keep the folder button visible with a manual download fallback when the
+browser cannot open a writable directory. Restore book and library JSON
+through **Restore backup** in the library.
+
 Data lives at `/data` in containers, root `data/` locally; do not delete these.
 
 The service has no application login and binds to loopback by default. The
@@ -313,13 +346,18 @@ Self-contained Playwright setup and local/hosted behavior checks are documented 
 `tests/README.md`. Install `requirements-test.txt` and Chromium in `.venv`, then run
 `.venv/bin/python -m pytest`. This generates synthetic file-reader output and starts
 a disposable hosted server automatically; no real manuscript or database is used.
-The shared reader tests cover walkthrough and theme settings. Alignment and
-editing tests live in `tests/test_editor.py`. `tests/test_comments.py` checks
+The shared tests in `tests/test_reader_behavior.py` cover walkthrough, themes,
+em dash replacement and undo, and book backup timing and download fallback.
+Alignment and editing tests live in `tests/test_editor.py`. `tests/test_comments.py` checks
 rendered highlight pixels and native DOCX comment ranges, formatting, and
-authors. `tests/test_glossary_poc.py` checks glossary tooltips, `tests/test_volumes.py`
-covers import and book settings, and `tests/test_vocabulary.py` covers Find.
+authors. `tests/test_glossary_poc.py` checks glossary tooltips and modal
+keyboard behavior. `tests/test_volumes.py` covers import, book settings, and
+deletion confirmation. `tests/test_vocabulary.py` covers Find.
 Run `.venv/bin/python tests/release_compatibility.py --previous-ref <ref>` against
 the previous production release when changing persistence or release handling.
+The check covers SQLite upgrade and rollback, version-1 JSON restore, and pending
+offline edits. Verify the running release through `/api/status` on the deployment
+host when reporting production compatibility.
 Failure traces and screenshots go to `test-results/`.
 
 ```sh

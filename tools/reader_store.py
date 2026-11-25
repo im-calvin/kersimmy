@@ -3,11 +3,14 @@ import base64
 import contextlib
 import datetime as dt
 import json
+import logging
 import re
 from pathlib import Path
 import sqlite3
 import threading
 import uuid
+
+log = logging.getLogger('kersimmy')
 
 
 class Store:
@@ -21,6 +24,8 @@ class Store:
         self.portable_json = portable_json
         self.backup_lock = threading.Lock()
         self.last_error = None
+        self.changes = 0
+        self.changes_lock = threading.Lock()
         with self.connect() as db:
             db.execute('PRAGMA journal_mode=WAL')
             db.execute('CREATE TABLE IF NOT EXISTS books (id TEXT PRIMARY KEY, book TEXT NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 0)')
@@ -70,12 +75,25 @@ class Store:
                 self.last_error = str(error)
                 raise
 
+    def changed(self):
+        with self.changes_lock:
+            self.changes += 1
+
     def run_backups(self, stop):
         while not stop.wait(self.interval):
+            with self.changes_lock:
+                changes, self.changes = self.changes, 0
             try:
-                self.backup()
+                name = self.backup()
             except Exception as error:
-                print('Automatic backup failed:', error, flush=True)
+                with self.changes_lock:
+                    self.changes += changes
+                log.error('Automatic snapshot failed: %s', error)
+                continue
+            if changes:
+                log.info('Automatic snapshot %s (%d change%s since the last one)', name, changes, '' if changes == 1 else 's')
+            else:
+                log.debug('Automatic snapshot %s (no changes)', name)
 
     def entries(self):
         with self.connect() as db:

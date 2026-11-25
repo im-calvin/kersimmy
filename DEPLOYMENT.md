@@ -41,6 +41,10 @@ empty library, ready for a manuscript or a book backup.
   drafts need the server. On a remote host, offline support requires HTTPS.
 - SQLite snapshots run at startup, every five minutes, and on orderly Python shutdown.
   BACKUP_INTERVAL_SECONDS and BACKUP_KEEP configure cadence and retention.
+- `docker compose logs -f reader` shows startup settings, opened books, imports,
+  settings changes, removals, save conflicts, rejected requests, errors, and
+  snapshots that contain changes. Draft saves appear at most once per book every
+  five minutes. Set `LOG_LEVEL=DEBUG` to also see every HTTP request.
   Defaults retain the newest 96 snapshots (roughly eight hours, less with manual or
   restart snapshots). Snapshots use SQLite's online backup API and integrity
   checks, then atomically rename the finished file. Failed backups are shown in
