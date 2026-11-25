@@ -40,7 +40,7 @@ def add_comment(page, text):
 def project(page):
     menu = open_exports(page)
     with page.expect_download() as download:
-        menu.get_by_role('button', name='Full project backup', exact=True).click()
+        menu.get_by_role('button', name='Back up book', exact=True).click()
     return json.loads(Path(download.value.path()).read_text())['books'][0]
 
 
@@ -194,8 +194,14 @@ def test_overlapping_comments_remain_accessible_from_the_passage(reader):
     click_commented_passage(page, 'Moonlight')
     popover = page.get_by_role('dialog', name='Comment', exact=True)
     expect(popover.locator('#comment-list p')).to_have_text(['First note.', 'Second note.'])
-    page.once('dialog', lambda dialog: dialog.accept())
     popover.get_by_role('button', name='delete', exact=True).first.click()
+    confirmation = page.get_by_role('dialog', name='Delete this comment?')
+    expect(confirmation.get_by_role('button', name='Cancel')).to_be_focused()
+    page.keyboard.press('Escape')
+    expect(confirmation).to_be_hidden()
+    expect(popover.locator('#comment-list p')).to_have_count(2)
+    popover.get_by_role('button', name='delete', exact=True).first.click()
+    confirmation.get_by_role('button', name='Delete comment').click()
     expect(popover.locator('#comment-list p')).to_have_text('Second note.')
 
 
@@ -249,8 +255,8 @@ def test_detached_comment_remains_in_word_and_can_be_deleted(reader):
         ''.join(p.itertext()) + '\n' for p in comments.findall('.//w:p', NS))
     assert 'A note spanning lines.' in ''.join(comments.itertext())
     page.get_by_role('button', name='1 comment to reattach', exact=True).click()
-    page.once('dialog', lambda dialog: dialog.accept())
     page.get_by_role('button', name='delete', exact=True).click()
+    page.get_by_role('dialog', name='Delete this comment?').get_by_role('button', name='Delete comment').click()
     expect(page.get_by_role('dialog', name='Reattach comments')).to_be_hidden()
     saved(reader)
     page.reload()

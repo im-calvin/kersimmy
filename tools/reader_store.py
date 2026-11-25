@@ -11,7 +11,7 @@ import uuid
 
 
 class Store:
-    def __init__(self, directory, interval=900, keep=96, *, portable_json=False):
+    def __init__(self, directory, interval=300, keep=96, *, portable_json=False):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.path = self.directory / 'reader.sqlite3'

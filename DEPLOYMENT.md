@@ -23,7 +23,7 @@ Do not remove the volume (`docker compose down -v` deletes it).
 
 The container runs as UID/GID 10001 with a read-only root filesystem. SQLite
 and its snapshots write to the named volume. A fresh volume starts with an
-empty library, ready for a manuscript or a full-project backup.
+empty library, ready for a manuscript or a book backup.
 
 ## Automatic saves, sync, and backups
 
@@ -39,23 +39,33 @@ empty library, ready for a manuscript or a full-project backup.
   Interrupted saves retain a recovery snapshot in browser storage and retry
   automatically on reconnect. The library, imports, and previously unopened
   drafts need the server. On a remote host, offline support requires HTTPS.
-- SQLite snapshots run at startup, every 15 minutes, and on orderly Python shutdown.
+- SQLite snapshots run at startup, every five minutes, and on orderly Python shutdown.
   BACKUP_INTERVAL_SECONDS and BACKUP_KEEP configure cadence and retention.
-  Defaults retain the newest 96 snapshots (roughly one day, less with manual or
+  Defaults retain the newest 96 snapshots (roughly eight hours, less with manual or
   restart snapshots). Snapshots use SQLite's online backup API and integrity
   checks, then atomically rename the finished file. Failed backups are shown in
-  the library server status. Back up server now creates an extra snapshot.
-- JSON book/library downloads and restores remain available.
+  the library server status. Snapshot library on server creates an extra SQLite snapshot.
+- **Back up library** downloads all books. **Back up book** downloads one
+  translation project, including its chapters. Both JSON files can be restored
+  with **Restore backup**.
 - Local Docker also writes version-1 JSON snapshots beside the SQLite files at
   the same interval. These include comments, offsets and italic ranges for
   Restore backup. Set `PORTABLE_JSON_SNAPSHOTS=0` when starting Compose to
-  disable the extra files. The file reader can also write snapshots while its tab is
-  open. In a supported browser, use Exports → Choose snapshot folder and set the
-  interval. Choose the folder again after reopening the file reader.
+  disable the extra files.
+- In a supported browser, open a draft and use **Exports → Choose book backup
+  folder** to save that book on your computer. The reader writes a restorable
+  JSON file immediately and every five minutes by default while the drafting tab
+  stays open. It includes pending edits in that tab. Choose the folder again
+  after reloading or reopening the draft. Browser snapshots accumulate in the
+  selected folder. Use **Restore backup** in the library to restore one.
+  If folder access is unavailable, use **Exports → Back up book** to
+  download the same kind of restorable JSON manually.
 
-Snapshots in the same volume protect against editing mistakes, not host/disk
-loss. Copy `/data/backups/` to another disk or include the volume in your existing
-server backup job. No external/cloud backup destination is configured.
+Server snapshots live in `/data/backups/` in Docker or `data/backups/` when
+running directly with the default data directory. They survive a container
+replacement with its volume intact. A lost host or disk also takes its snapshots.
+Use a browser folder on another machine for the open book, or replicate
+`/data/backups/` to another machine for unattended whole-library recovery.
 
 ## Migrate existing drafts
 
@@ -63,7 +73,7 @@ At your original browser address, choose Back up library, then Restore backup on
 the SQLite site. The Import browser library button can copy books automatically
 when the old IndexedDB data is available at the exact same origin/profile.
 Migration preserves browser copies and creates new server copies; run it once
-or you will get duplicates. The original reader's full project backup works too.
+or you will get duplicates. The original reader's book backup works too.
 
 ## Restore a database snapshot
 

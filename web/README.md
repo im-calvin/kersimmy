@@ -22,9 +22,9 @@ SQLite saves your work and makes it available to other browsers using this serve
 Open **Settings → Set book icon** on a library card to choose its icon. The icon is stored
 with the book and included in JSON backups.
 
-Use **Settings → Remove book → Delete book** to remove a book and its
-saved drafts and comments. Use **Settings → Back up book** first if you want to
-keep a restorable copy.
+Open **Settings → Remove book**, type `I am an idiot sandwich`, and click
+**Delete book** to remove the book and its saved drafts and comments. Use
+**Settings → Back up book** first if you want to keep a restorable copy.
 
 Default headings include 第1章, 第一回, and Chapter 1. Use One chapter for an
 unnumbered manuscript, or Custom heading pattern for a Python regular expression
@@ -49,9 +49,9 @@ a `番外篇` heading.
 
 For an existing book, click **Settings** on its library card. Edit titles
 directly or select chapters and assign a volume. Applying an empty volume name
-clears the assignment. **Save chapters** keeps chapter keys and draft state
-intact. The save checks the book revision, so concurrent edits require reopening
-the organizer before retrying.
+clears the assignment. Edit **Book name** to rename the book. **Save changes**
+preserves chapter keys and draft state. The save checks the book revision, so
+concurrent edits require reopening Book settings before retrying.
 
 Use **Settings → Recheck import** to upload the original file again and
 try different parsing settings. You can apply the new titles and volume metadata
@@ -74,7 +74,7 @@ for italics. Select a translation passage and choose the Add comment speech bubb
 beside the selection.
 
 **Stats** displays the total time recorded while editing drafts and comments.
-Full project and library JSON backups store chapter times in `state.times`,
+Book and library JSON backups store chapter times in `state.times`,
 keyed by chapter ID in milliseconds. Update that field in a backup to correct
 recorded times before restoring a copy of the book.
 Use the sun or moon icon under **View** in the draft, or in the library or review
@@ -88,17 +88,18 @@ Find searches the whole book. Queries containing
 Chinese characters look in the source first, and other queries start in the
 translation. Find tries the other side if there are no matches. Show more
 exposes results beyond the first 40. Search is literal and case-sensitive,
-and Find shows both the number of matches and the number of matching paragraphs. Smart quotes remain disabled in hosted
+and Find shows both the number of matches and the number of matching paragraphs.
+Typing `--` inserts an em dash in the hosted draft. Smart quotes remain disabled in hosted
 pages, and the SOURCE/YOUR TRANSLATION labels are absent.
 
 Stats includes Choose GIF and Remove GIF. The image is stored with the book and
 included in JSON exports. Choose an animated GIF up to 5 MB.
 
-Previously saved review text remains in project backups. The original
+Previously saved review text remains in book backups. The original
 `/books/<id>/review` address is available for existing bookmarks.
 
 Click outside statistics/search/review overlays to dismiss them. Escape and the
-original close buttons also work. The library/import form uses native dialogs.
+original close buttons also work. The library and import forms use in-app dialogs.
 
 ## Saving, sync, migration
 
@@ -123,7 +124,7 @@ copies are retained. Repeating migration creates new independent copies.
 
 The library Back up library and **Settings → Back up book** export full JSON. In the
 draft's **Exports** menu, **Draft text backup** exports English text and
-**Full project backup** exports a project JSON. **Import drafts** accepts
+**Back up book** exports the open book as JSON. **Import drafts** accepts
 Chapter N text backups.
 
 ## Original file-based reader
@@ -131,11 +132,11 @@ Chapter N text backups.
 The prebuilt file reader is archived. To use it again, restore its files to
 their original paths and open `draft.html` in Chrome.
 Its localStorage and existing drafts are unchanged. To move local drafts and
-settings to the hosted library, use **Exports → Full project backup**, then Restore backup
+settings to the hosted library, use **Exports → Back up book**, then Restore backup
 in the library. The file-based reader's generator workflow remains available. Optional volume
 parsing uses `volume_heading_regex` in an alternate config;
 `tools/chapter_structure.py` defines the built-in heading expression. If enabling
-restarted numbering for an existing file project, first keep a full project backup,
+restarted numbering for an existing book in the file reader, first keep a book backup,
 use a new storage prefix/output and explicitly migrate work: newly parsed chapter
 keys may differ. Existing root configuration keeps volume parsing off.
 

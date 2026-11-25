@@ -12,7 +12,7 @@ docker compose up -d --build --wait
 ```
 
 Open [the local reader](http://127.0.0.1:8888/) and import a manuscript or restore a
-project backup. The `reader_data` Docker volume holds the library, drafts, and
+book backup. The `reader_data` Docker volume holds the library, drafts, and
 snapshots. Keep the volume when upgrading. See [DEPLOYMENT.md](DEPLOYMENT.md) for
 backup and restore instructions.
 

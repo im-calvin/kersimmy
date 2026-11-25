@@ -15,6 +15,7 @@ import argparse
 import html
 import json
 import sys
+from pathlib import Path
 
 import reader_theme
 from chapter_structure import options as chapter_options, number as chapter_number, metadata
@@ -215,6 +216,8 @@ PAGE = """<!DOCTYPE html>
 <meta name="robots" content="noindex,nofollow">
 <title>Side by side</title>
 <script data-reader-theme>{theme_script}</script>
+<style>{dialog_css}</style>
+<script data-app-dialogs>{dialog_script}</script>
 <style>{css}</style>
 </head>
 <body>
@@ -267,6 +270,8 @@ def render_page(cfg, chapters):
     options = chapter_options(chapters, titles=False)
     meta = json.dumps([{'no':c['no'], 'title':c['title'], **metadata(c)} for c in chapters], ensure_ascii=False).replace('<', '\\u003c')
     return PAGE.format(css=reader_theme.CSS + CSS, theme_script=reader_theme.SCRIPT,
+                       dialog_css=(Path(__file__).resolve().parent.parent / 'web/dialogs.css').read_text(encoding='utf-8'),
+                       dialog_script=(Path(__file__).resolve().parent.parent / 'web/dialogs.js').read_text(encoding='utf-8'),
                        theme_control=reader_theme.CONTROL,
                        js=JS.replace('__CHAPTERS__', meta).replace('__PFX__', cfg['storage_prefix']),
                        cn='\n'.join(cn), options=options)

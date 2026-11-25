@@ -181,8 +181,8 @@ def test_hosted_formatting_recovery_and_text_import(page, reader_environment):
     menu = open_exports(page)
     with page.expect_file_chooser() as chooser:
         menu.get_by_role('button', name='Import drafts', exact=True).click()
-    page.once('dialog', lambda dialog: dialog.accept())
     chooser.value.set_files({'name': 'draft.txt', 'mimeType': 'text/plain', 'buffer': b'Chapter 1\nPlain replacement.'})
+    page.get_by_role('dialog', name='Replace matching existing drafts?').get_by_role('button', name='Replace drafts').click()
     expect(page.locator('#ta')).to_have_js_property('value', 'Plain replacement.')
     expect(page.locator('#reader-server-status')).to_have_text('Synced to server')
     page.reload()
@@ -230,8 +230,8 @@ def test_offline_conflict_never_rebases_pending_changes_on_reload(page, reader_e
         assert page.request.get(state_url).json()['drafts']['1'] == 'Other device draft.'
     assert project(page)['state']['drafts']['1'] == 'My offline draft.'
     save_menu.click()
-    page.once('dialog', lambda dialog: dialog.accept())
     use_server.click()
+    page.locator('.app-confirm').get_by_role('button', name='Use server version').click()
     expect(page.locator('#ta')).to_have_js_property('value', 'Other device draft.')
     expect(use_server).to_be_hidden()
 
@@ -297,7 +297,7 @@ def test_slash_italics_and_numbered_alignment(reader):
         # Use the latest English paragraph in the editor itself.
         editor.press('ControlOrMeta+End')
         editor.press('!')
-        expect(page.locator('#al')).to_have_text('EN 3 ↔ 中文 3')
+        expect(page.locator('#al')).to_have_text('中文 3 ↔ EN 3')
         expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p3')
         expect(page.locator('#cn')).to_have_js_property('scrollTop', 0)
     else:
@@ -325,7 +325,7 @@ def test_file_reader_schedules_portable_snapshots(page, reader_environment):
     page.locator('#ta').fill('First version.')
     open_exports(page)
     page.get_by_label('Snapshot interval (minutes)').fill('1')
-    page.get_by_role('button', name='Choose snapshot folder').click()
+    page.get_by_role('button', name='Choose book backup folder').click()
     expect(page.locator('#snapshot-status')).to_contain_text('Snapshot saved')
     page.locator('#ta').fill('Later version.')
     page.clock.fast_forward(61000)
@@ -343,32 +343,32 @@ def test_one_english_paragraph_can_highlight_a_saved_source_range(reader):
     editor.fill('Combined translation.\nNext translation.')
     editor.evaluate("el=>el.setSelectionRange(3,3)")
     editor.press('ArrowRight')
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1')
+    expect(page.locator('#al')).to_have_text('中文 1 ↔ EN 1')
     page.locator('#c1p3').click()
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1')
+    expect(page.locator('#al')).to_have_text('中文 1 ↔ EN 1')
     editor.focus()
     editor.evaluate("el=>el.setSelectionRange(3,3)")
     page.locator('#c1p1').click(modifiers=['Alt'])
     page.locator('#c1p2').click(modifiers=['Shift'])
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–2')
+    expect(page.locator('#al')).to_have_text('中文 1–2 ↔ EN 1')
     assert page.locator('#cn p.hit').evaluate_all('nodes=>nodes.map(node=>node.id)') == ['c1p1', 'c1p2']
     editor.press('ArrowDown')
-    expect(page.locator('#al')).to_contain_text('EN 2 ↔ 中文 3')
+    expect(page.locator('#al')).to_contain_text('中文 3 ↔ EN 2')
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p3')
     page.locator('#c1p2').click(modifiers=['Alt'])
-    expect(page.locator('#al')).to_contain_text('EN 2 ↔ 中文 3')
+    expect(page.locator('#al')).to_contain_text('中文 3 ↔ EN 2')
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p3')
     saved(reader)
     assert project(page)['state']['alignmentGroups'] == {'1': {'1': [1, 2]}}
     page.locator('#c1p2').click()
     expect(editor).not_to_be_focused()
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–2')
+    expect(page.locator('#al')).to_have_text('中文 1–2 ↔ EN 1')
     assert page.evaluate("[...CSS.highlights.get('translation-reading')][0].toString()") == 'Combined translation.'
     editor.click()
     assert page.evaluate("CSS.highlights.has('translation-reading')") is False
     page.reload()
     expect(page.locator('#cn p.hit')).to_have_count(2)
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–2')
+    expect(page.locator('#al')).to_have_text('中文 1–2 ↔ EN 1')
     page.get_by_role('button', name='reset', exact=True).click()
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p1')
 
@@ -379,15 +379,15 @@ def test_source_range_can_extend_in_both_directions_with_option_held(reader):
     editor.fill('One translation for all three paragraphs.')
     editor.evaluate('el=>el.setSelectionRange(0,0)')
     page.locator('#c1p2').click(modifiers=['Alt'])
-    expect(page.locator('#al')).to_contain_text('EN 1 ↔ 中文 2')
+    expect(page.locator('#al')).to_contain_text('中文 2 ↔ EN 1')
     page.locator('#c1p3').click(modifiers=['Alt', 'Shift'])
-    expect(page.locator('#al')).to_contain_text('EN 1 ↔ 中文 2–3')
+    expect(page.locator('#al')).to_contain_text('中文 2–3 ↔ EN 1')
     page.locator('#c1p1').click(modifiers=['Shift'])
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–3')
+    expect(page.locator('#al')).to_have_text('中文 1–3 ↔ EN 1')
     expect(page.locator('#cn p.hit')).to_have_count(3)
     saved(reader)
     page.reload()
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–3')
+    expect(page.locator('#al')).to_have_text('中文 1–3 ↔ EN 1')
     expect(page.locator('#cn p.hit')).to_have_count(3)
 
 
@@ -403,15 +403,15 @@ def test_older_overlapping_links_are_read_in_forward_order(page, reader_environm
     assert response.status == 201, response.text()
     book = response.json()[0]
     page.goto(f"{base}/books/{book['id']}/draft")
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1–3')
+    expect(page.locator('#al')).to_have_text('中文 1–3 ↔ EN 1')
     editor = page.locator('#ta')
     editor.focus()
     editor.evaluate('el=>el.setSelectionRange(4,4)')
     editor.press('ArrowRight')
-    expect(page.locator('#al')).to_contain_text('EN 2 ↔ 中文 4')
+    expect(page.locator('#al')).to_contain_text('中文 4 ↔ EN 2')
     editor.evaluate('el=>el.setSelectionRange(14,14)')
     editor.press('ArrowRight')
-    expect(page.locator('#al')).to_contain_text('EN 4 ↔ 中文 6')
+    expect(page.locator('#al')).to_contain_text('中文 6 ↔ EN 4')
     state = page.request.get(f"{base}/api/books/{book['id']}/state").json()
     assert state['alignmentGroups']['1']['2'] == [2, 2]
 
@@ -430,28 +430,28 @@ def test_hosted_source_scrolls_with_english_while_the_highlight_follows_the_care
     page.goto(f'{base}/books/{book_id}/draft')
     source = page.locator('#cn')
     editor = page.locator('#ta')
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1')
+    expect(page.locator('#al')).to_have_text('中文 1 ↔ EN 1')
     editor.focus()
     editor.press('ArrowDown')
-    expect(page.locator('#al')).to_have_text('EN 2 ↔ 中文 2')
+    expect(page.locator('#al')).to_have_text('中文 2 ↔ EN 2')
     expect(source).to_have_js_property('scrollTop', 0)
     caret_offset = len('\n'.join(paragraphs[:7])) + 1
     editor.evaluate('(el, offset)=>el.setSelectionRange(offset, offset)', caret_offset)
     editor.press('ArrowRight')
-    expect(page.locator('#al')).to_have_text('EN 8 ↔ 中文 8')
+    expect(page.locator('#al')).to_have_text('中文 8 ↔ EN 8')
     with page.expect_event('console', predicate=lambda message: message.text == 'test scroll rendered'):
         editor.evaluate("""el=>{
           el.addEventListener('scroll',()=>requestAnimationFrame(()=>console.log('test scroll rendered')),{once:true});
           el.scrollTop=96;
         }""")
-    expect(page.locator('#al')).to_have_text('EN 8 ↔ 中文 8')
+    expect(page.locator('#al')).to_have_text('中文 8 ↔ EN 8')
     expect(source).to_have_js_property('scrollTop', 96)
     assert page.evaluate("[...CSS.highlights.get('translation-reading')][0].toString()") == paragraphs[7]
     editor.evaluate("""el=>{
       const caret=getSelection().getRangeAt(0).getBoundingClientRect();
       el.scrollTop+=caret.bottom-el.getBoundingClientRect().top-5;
     }""")
-    expect(page.locator('#al')).to_have_text('EN 9 ↔ 中文 9')
+    expect(page.locator('#al')).to_have_text('中文 9 ↔ EN 9')
     editor.evaluate("el=>el.scrollTop=el.scrollHeight")
     page.wait_for_function("""() => {
       const source=document.querySelector('#cn');
@@ -475,17 +475,17 @@ def test_hosted_source_scrolls_with_english_while_the_highlight_follows_the_care
         return bounds.bottom>pane.top&&bounds.top<pane.bottom-buffer;
       }).length;
     }""")
-    expect(page.locator('#al')).to_have_text(f'EN {bottom_visible} ↔ 中文 {bottom_visible}')
+    expect(page.locator('#al')).to_have_text(f'中文 {bottom_visible} ↔ EN {bottom_visible}')
     expect(editor).to_have_js_property('selectionStart', len('\n'.join(paragraphs[:bottom_visible])))
     assert page.evaluate("[...CSS.highlights.get('translation-reading')][0].toString()") == paragraphs[bottom_visible - 1]
     source.locator('#c1p2').click()
-    expect(page.locator('#al')).to_have_text('EN 2 ↔ 中文 2')
+    expect(page.locator('#al')).to_have_text('中文 2 ↔ EN 2')
     assert page.evaluate("[...CSS.highlights.get('translation-reading')][0].toString()") == paragraphs[1]
     editor.locator(':scope > div').nth(7).click()
     expect(editor).to_be_focused()
-    expect(page.locator('#al')).to_have_text('EN 8 ↔ 中文 8')
+    expect(page.locator('#al')).to_have_text('中文 8 ↔ EN 8')
     source.locator('#c1p32').click()
-    expect(page.locator('#al')).to_have_text('EN 32 ↔ 中文 32')
+    expect(page.locator('#al')).to_have_text('中文 32 ↔ EN 32')
     page.wait_for_function("""() => {
       const editor = document.getElementById('ta');
       const range = [...CSS.highlights.get('translation-reading')][0];
@@ -509,13 +509,13 @@ def test_scroll_handoff_skips_blank_lines_and_highlights_visible_english(page, r
     editor = page.locator('#ta')
     editor.focus()
     editor.press('ArrowRight')
-    expect(page.locator('#al')).to_have_text('EN 1 ↔ 中文 1')
+    expect(page.locator('#al')).to_have_text('中文 1 ↔ EN 1')
     editor.evaluate("""el=>{
       const range=document.createRange();
       range.selectNodeContents(el.children[1]);
       el.scrollTop=Math.ceil(range.getBoundingClientRect().bottom-el.getBoundingClientRect().top)+4;
     }""")
-    expect(page.locator('#al')).to_have_text('EN 3 ↔ 中文 3')
+    expect(page.locator('#al')).to_have_text('中文 3 ↔ EN 3')
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p3')
     assert page.evaluate("""() => {
       const range=[...CSS.highlights.get('translation-reading')][0];
@@ -537,4 +537,4 @@ def test_scroll_handoff_skips_blank_lines_and_highlights_visible_english(page, r
       const rect=selection.getRangeAt(0).getClientRects()[0];
       return editor.selectionStart>start && rect?.bottom>pane.top && rect?.top<pane.bottom;
     }""", arg={'start': start})
-    expect(page.locator('#al')).to_have_text('EN 3 ↔ 中文 3')
+    expect(page.locator('#al')).to_have_text('中文 3 ↔ EN 3')

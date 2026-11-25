@@ -1,7 +1,6 @@
-import {dismissOnBackdrop} from './dialogs.js';
 
 const dialog = document.getElementById('glossary-dialog');
-dismissOnBackdrop(dialog);
+window.readerDialogs.attach(dialog);
 const table = document.getElementById('glossary-terms');
 const status = document.getElementById('glossary-status');
 const add = document.getElementById('glossary-add');

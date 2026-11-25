@@ -16,7 +16,7 @@ CSS = """
 .comment-add-icon::after{content:'';position:absolute;left:3px;bottom:-4px;width:4px;height:4px;
   border-left:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
   transform:skewY(-38deg);background:inherit}
-#comments-dialog:modal{inset:0;margin:auto}
+#comments-dialog[aria-modal="true"]{inset:0;margin:auto}
 #comments-dialog label{font-size:13px}
 #comments-dialog h2{font-size:17px;margin:0 0 1rem}
 #comments-dialog textarea{width:100%;min-height:5rem;box-sizing:border-box;
@@ -38,7 +38,7 @@ HTML = """
 <button id="comment-add" type="button" class="act" aria-label="Add comment" title="Add comment" hidden>
   <span class="comment-add-icon" aria-hidden="true">+</span>
 </button>
-<dialog id="comments-dialog" aria-labelledby="comments-title">
+<div class="app-dialog" role="dialog" hidden id="comments-dialog" aria-labelledby="comments-title">
   <h2 id="comments-title">Add comment</h2>
   <div id="comment-list"></div>
   <p id="comment-message" role="status"></p>
@@ -49,7 +49,7 @@ HTML = """
   </form>
   <div class="actions"><button type="button" onclick="closeComments()">close</button>
   <button id="save-comment" type="submit" form="comment-form" class="act">save comment</button></div>
-</dialog>
+</div>
 """
 
 JS = r"""
@@ -60,7 +60,7 @@ authorField.addEventListener('input',()=>localStorage.setItem(AUTHOR_KEY,authorF
 let comments=readComments(), annotationText='', commentSelection=null;
 let editingComment=null, activeCommentIDs=[], recoveringComments=false, selectedQuote='';
 let commentRanges=[];
-const commentDialog=document.getElementById('comments-dialog');
+const commentDialog=window.readerDialogs.attach(document.getElementById('comments-dialog'));
 const commentField=document.getElementById('comment-text');
 const commentForm=commentField.form;
 const commentSubmit=document.getElementById('save-comment');
@@ -187,16 +187,16 @@ addEventListener('resize',()=>{paintCommentHighlights();updateCommentButton();po
 commentAdd.addEventListener('mousedown',event=>event.preventDefault());
 commentAdd.addEventListener('click',()=>openComments());
 reattachButton.addEventListener('click',()=>openComments([],true));
+commentDialog.addEventListener('cancel',event=>{
+  event.preventDefault();
+  closeComments();
+});
 document.addEventListener('pointerdown',event=>{
   if(!commentDialog.open)return;
-  if(!recoveringComments&&!commentDialog.contains(event.target))closeComments(false,false);
-  if(recoveringComments&&event.target===commentDialog){
-    const rect=commentDialog.getBoundingClientRect();
-    if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeComments();
-  }
+  if(!recoveringComments&&!commentDialog.contains(event.target)&&!document.querySelector('[aria-modal="true"]'))closeComments(false,false);
 });
 function openComments(ids=[],recovering=false){
-  if(!closeComments(false))return;
+  if(!closeComments(false,true,()=>openComments(ids,recovering)))return;
   commentSelection={start:ta.selectionStart,end:ta.selectionEnd};
   selectedQuote=ta.value.slice(commentSelection.start,commentSelection.end);
   activeCommentIDs=ids;
@@ -211,9 +211,17 @@ function openComments(ids=[],recovering=false){
   positionComments();
   if(!commentForm.hidden)commentField.focus();
 }
-function closeComments(restoreFocus=true,ask=true){
+function closeComments(restoreFocus=true,ask=true,afterClose){
   if(!commentDialog.open)return true;
-  if(hasUnsavedComment()&&(!ask||!confirm('Discard the unsaved comment?')))return false;
+  if(hasUnsavedComment()){
+    if(ask)window.readerDialogs.confirm('Discard the unsaved comment?','Discard comment').then(discard=>{
+      if(!discard)return;
+      commentField.value='';
+      closeComments(restoreFocus);
+      afterClose?.();
+    });
+    return false;
+  }
   commentField.value='';
   commentDialog.close();
   if(restoreFocus)ta.focus();
@@ -240,20 +248,20 @@ function renderComments(){
     }
     if(note.detached){const warning=document.createElement('p');warning.textContent='Passage changed. Select text in the draft, then reopen comments to reattach.';card.append(warning)}
     const action=(label,fn)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=fn;card.append(button)};
-    action('edit',()=>{
-      if(hasUnsavedComment()&&!confirm('Discard the unsaved comment?'))return;
+    action('edit',async()=>{
+      if(hasUnsavedComment()&&!await window.readerDialogs.confirm('Discard the unsaved comment?','Discard comment'))return;
       editingComment=note.id;commentField.value=note.text;
       renderCommentForm();positionComments();commentField.focus();
     });
-    if(note.detached&&selectedQuote)action('reattach',()=>{
-      if(hasUnsavedComment()&&!confirm('Discard the unsaved comment?'))return;
+    if(note.detached&&selectedQuote)action('reattach',async()=>{
+      if(hasUnsavedComment()&&!await window.readerDialogs.confirm('Discard the unsaved comment?','Discard comment'))return;
       if(!commentPassageStillMatches())return;
       editingComment=null;commentField.value='';
       Object.assign(note,commentSelection,{quote:ta.value.slice(commentSelection.start,commentSelection.end),detached:false});touch();commit();renderComments();
       if(!commentDialog.open)ta.setSelectionRange(note.end,note.end);
     });
-    action('delete',()=>{
-      if(!confirm('Delete this comment?'))return;
+    action('delete',async()=>{
+      if(!await window.readerDialogs.confirm('Delete this comment?','Delete comment'))return;
       comments[cur]=chapterComments().filter(n=>n.id!==note.id);
       if(editingComment===note.id){editingComment=null;commentField.value=''}
       touch();commit();

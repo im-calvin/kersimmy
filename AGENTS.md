@@ -15,6 +15,10 @@ root output merely to inspect the project.
 
 ## Product direction
 
+The **Library** contains all books. A **Book** is one translation project.
+A **Chapter** belongs to a book. Use these terms in the app and backup
+instructions.
+
 See [ROADMAP.md](ROADMAP.md) for the high-level goal, completed product baseline,
 remaining work, and shared-glossary stretch goal. Use the local editor as the
 reference for hosted behavior. The draft walkthrough appears when opening the
@@ -24,13 +28,13 @@ the user switches it with the sun or moon under **View** in the draft. Dark mode
 uses beige reading text.
 
 The whole library card opens the draft. **Settings** opens the book-specific actions.
-Use **Book settings** for the book icon, book backup, import recheck, and chapter
+Use **Book settings** for the book name, icon, backup, import recheck, and chapter
 titles and volumes. Keep deletion under **Remove book**. It requires typing
 `I am an idiot sandwich` exactly and checks the current book revision.
 
 In the draft, **View** contains the Word comment author, and **Exports** contains
-Word export with native comments, Google Docs copy, and draft and project
-backups. **Stats** shows the automatically recorded project time. Version-1 JSON
+Word export with native comments, Google Docs copy, and draft text and book
+backups. **Stats** shows the automatically recorded book time. Version-1 JSON
 backups store chapter times in `state.times`. Find searches the whole book,
 starting with the source for queries containing Han characters and the
 translation for other queries. It checks the other side when the first side
@@ -78,7 +82,7 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
   chapter options. `chapter.volume` and optional displayed `chapter.number` are
   additive metadata; numeric `chapter.no` remains the unique persistence key.
 - `tools/build_draft.py`: original draft HTML/CSS/JavaScript, walkthrough,
-  paragraph sync, search, statistics, timing, and text/project export.
+  paragraph sync, search, statistics, timing, and text/book export.
   `render_page(cfg, chapters, illustration)` is used by the CLI and server.
 - `tools/draft_editor.py`: minimal native editable surface and italic range rendering,
   embedded by the draft generator. Plain draft strings and UTF-16 selection offsets
@@ -120,7 +124,8 @@ actual browser localStorage. `dist/` alone is not a standalone hosted app.
   Do not implement editor/search/statistics algorithms here; change templates.
 - `web/reader-worker.js`, `web/reader-offline.js`: hosted draft caching and
   IndexedDB storage for offline reloads.
-- `web/dialogs.js`: native library-dialog backdrop dismissal.
+- `web/dialogs.js` and `web/dialogs.css`: shared app dialogs, including focus,
+  backdrop dismissal and confirmation. Embedded in generated readers.
 - `web/glossary-poc.js` and `web/glossary-poc.css`: hosted glossary editor, source
   marking, and definition tooltip. Glossary data uses browser storage.
 - `web/illustration.js`: local GIF reading and validation (5 MB/16 MP limits).
@@ -212,8 +217,8 @@ JSON state, revision) and version-1 JSON backups. Every book imported through
 JSON restore or migration gets an independent UUID; offline SQLite snapshot
 restore preserves the stored IDs. Do not discard existing SQLite or browser
 data during edits.
-Volume and title edits on existing books use `/api/books/<id>/volumes` with an
-expected revision. Preserve chapter keys and translation state. Import recheck
+Book names, volume assignments, and chapter titles use `/api/books/<id>/volumes`
+with an expected revision. Preserve chapter keys and translation state. Import recheck
 uses `/api/books/<id>/chapter-import` to apply titles and volume metadata only
 when the chapter IDs, order, and source paragraphs still match. Import a
 separate book when the source or chapter boundaries change.
@@ -233,7 +238,7 @@ stay in browser storage. The Word comment author is saved with the book.
 
 Generated hosted pages use an in-memory `readerStorage` adapter with the original
 key conventions. The file reader continues to use its actual localStorage keys.
-Never silently rename/clear the root file reader's keys. Full project backup from
+Never silently rename/clear the root file reader's keys. A book backup from
 the original page includes source, drafts, timings, preferences and review data;
 JSON restore and browser-library migration remain available in the library.
 
@@ -247,7 +252,7 @@ stores the book and confirmed draft state in IndexedDB. Keep the original
 revision with pending edits across reloads so the server can reject conflicts.
 The library and manuscript import require a connection. On conflict, the
 reader offers a JSON recovery backup or lets the user reload the server copy.
-Hosted smart punctuation is disabled;
+Hosted smart quotes are disabled. Typing two hyphens inserts an em dash.
 SOURCE and YOUR TRANSLATION labels remain absent. Preserve requested backdrop
 closing and per-book GIF customization when updating generated page integration.
 
@@ -261,7 +266,9 @@ dialogs, and active imports from automatic reloads.
 
 SQLite uses WAL/FULL commits on local disk. Automatic snapshots use SQLite's
 online backup API, integrity checks, temporary files/atomic rename, and bounded
-retention (15 minutes / newest 96 by default). Never copy a live WAL database
+retention (five minutes / newest 96 by default). The draft can also write
+restorable JSON to a browser-selected folder while the tab stays open.
+Never copy a live WAL database
 as a plain file. Restore requires the app stopped. Snapshots in the same Docker
 volume do not protect against host/disk loss; external replication is separate.
 Data lives at `/data` in containers, root `data/` locally; do not delete these.

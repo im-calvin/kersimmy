@@ -1,0 +1,10 @@
+.app-dialog[hidden]{display:none!important}
+.app-dialog{box-sizing:border-box;overflow:auto}
+.app-dialog[aria-modal="true"]{position:fixed;inset:0;margin:auto;height:fit-content;overscroll-behavior:contain}
+.app-dialog-backdrop{position:fixed;inset:0;background:var(--scrim);touch-action:none}
+.app-confirm{width:min(27rem,92vw);max-height:90vh;padding:1.15rem;border:1px solid var(--line);
+  border-radius:10px;color:var(--ink);background:var(--bg,var(--paper));box-shadow:0 8px 28px #29241e26}
+.app-confirm p{margin:0 0 1rem}
+.app-confirm>div{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem}
+.app-confirm button{border:1px solid var(--line);padding:.4rem .65rem;color:var(--ink)}
+body:has(> .app-dialog-backdrop){overflow:hidden}

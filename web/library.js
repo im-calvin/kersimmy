@@ -1,9 +1,8 @@
-import {dismissOnBackdrop} from './dialogs.js';
 import {previewManuscript, getBundle, setVolumes, updateImport, deleteBook, setBookIcon} from './db.js';
 const stripHeading = text => text.replace(/^\s*(?:Chapter|Ch\.?)\s+\d+[^\n]*\n/i, '').trim();
 import {listBooks, serverMode, migrateBrowserLibrary, backupServer, serverStatus, getBook, getState, importBooks, backupPayload, readBackup, download, filename, stamp} from './db.js';
 const $ = id => document.getElementById(id);
-document.querySelectorAll('dialog').forEach(dismissOnBackdrop);
+document.querySelectorAll('.app-dialog').forEach(window.readerDialogs.attach);
 let preview = null, currentBook = null, parsingVersion = 0, importTarget = null;
 const message = (text, error = false) => { $('message').textContent = text; $('message').className = error ? 'error' : ''; };
 function element(tag, text, className) {
@@ -242,18 +241,27 @@ $('import-current').onclick = async () => {
   $('import-current').disabled = true;
   try {
     await importBooks([{book:currentBook}]); await renderLibrary();
-    message('Manuscript added. For complete migration, use “full project backup” in the original reader and “Restore backup” here. Text-only backups can be imported inside a book.');
+    message('Manuscript added. For complete migration, use “Back up book” in the original reader and “Restore backup” here. Text-only backups can be imported inside a book.');
   } catch (e) { message(e.message, true); }
   finally { $('import-current').disabled = false; }
 };
 let organization=null, assignedVolumes={}, editedTitles={}, selectedChapters=new Set();
+let deletingBook=false;
+const deletionPhrase='I am an idiot sandwich';
+const deleteConfirmation=$('delete-book-confirmation');
+const deleteButton=$('delete-book');
+function updateDeleteButton(){
+  deleteButton.disabled=deletingBook||deleteConfirmation.value!==deletionPhrase;
+}
 async function openBookSettings(id) {
   organization=await getBundle(id);assignedVolumes={};editedTitles={};selectedChapters=new Set();
   $('book-settings-danger').open=false;
+  deleteConfirmation.value='';
+  updateDeleteButton();
   $('book-settings-status').textContent='';
   showSettingsIcon(organization.book.icon);
   for(const chapter of organization.book.chapters)assignedVolumes[chapter.no]=chapter.volume||'';
-  $('volumes-book').textContent=organization.book.title;
+  $('book-settings-name').value=organization.book.title;
   $('volume-name').value='';$('volumes-error').textContent='';
   renderVolumes();$('volumes-dialog').showModal();
 }
@@ -326,17 +334,22 @@ $('assign-volume').onclick=()=>{
   for(const no of selectedChapters)assignedVolumes[no]=$('volume-name').value.trim();
   $('volumes-error').textContent='';renderVolumes();
 };
-$('delete-book').onclick=async()=>{
+deleteConfirmation.addEventListener('input',updateDeleteButton);
+deleteConfirmation.addEventListener('keydown',event=>{
+  if(event.key==='Enter')event.preventDefault();
+});
+$('book-settings-danger').addEventListener('toggle',event=>{
+  if(event.currentTarget.open)return;
+  deleteConfirmation.value='';
+  updateDeleteButton();
+});
+deleteButton.onclick=async()=>{
+  const confirmation=deleteConfirmation.value;
+  if(deletingBook||confirmation!==deletionPhrase)return;
   const target=organization;
   const {id,title}=target.book;
-  const confirmation=prompt(`To delete “${title}” and its saved drafts and comments, type I am an idiot sandwich`);
-  if(confirmation===null)return;
-  if(confirmation!=='I am an idiot sandwich'){
-    $('volumes-error').textContent='The confirmation phrase did not match.';
-    return;
-  }
-  const button=$('delete-book');
-  button.disabled=true;
+  deletingBook=true;
+  updateDeleteButton();
   try {
     await deleteBook(id,target.state.revision,confirmation);
     try {
@@ -353,14 +366,17 @@ $('delete-book').onclick=async()=>{
     if(organization===target&&$('volumes-dialog').open)$('volumes-error').textContent=error.message;
     else message(error.message,true);
   } finally {
-    button.disabled=false;
+    deletingBook=false;
+    updateDeleteButton();
   }
 };
 $('volumes-form').onsubmit=async e=>{
   e.preventDefault();$('save-volumes').disabled=true;
   try{
-    await setVolumes(organization.book.id,assignedVolumes,organization.state.revision,editedTitles);
-    $('volumes-dialog').close();await renderLibrary();message('Chapter changes saved.');
+    const {book,state}=organization;
+    const name=$('book-settings-name').value;
+    await setVolumes(book.id,assignedVolumes,state.revision,editedTitles,name===book.title?undefined:name);
+    $('volumes-dialog').close();await renderLibrary();message('Book settings saved.');
   }catch(error){$('volumes-error').textContent=error.message}
   finally{$('save-volumes').disabled=false}
 };
@@ -390,7 +406,7 @@ if (serverMode) {
     try { const books = await migrateBrowserLibrary(); await renderLibrary(); message(books.length ? `Copied ${books.length} browser books to the server. Original browser copies are kept.` : 'No books in this browser. Use Restore backup to import a JSON export from your old address.'); }
     catch(e) { message(e.message,true); } finally { migrate.disabled = false; }
   };
-  const backup = element('button','Back up server now');
+  const backup = element('button','Snapshot library on server');
   backup.onclick = async () => { try { const result = await backupServer(); message('SQLite snapshot created: ' + result.backup); } catch(e) { message(e.message,true); } };
   actions.append(migrate,backup);
   let libraryRelease;
@@ -403,10 +419,10 @@ if (serverMode) {
     message(status.backupError ? 'Automatic backup error: ' + status.backupError : `Server storage active · automatic SQLite backup every ${Math.round(status.backupIntervalSeconds / 60)} minutes · ${status.backupCount} snapshots.`,!!status.backupError);
   }).catch(()=>{});
   setInterval(async () => {
-    if (document.hidden || document.querySelector('dialog[open]')) return;
+    if (document.hidden || document.querySelector('.app-dialog[open]')) return;
     try {
       const status = await serverStatus();
-      if (document.hidden || document.querySelector('dialog[open]')) return;
+      if (document.hidden || document.querySelector('.app-dialog[open]')) return;
       if (libraryRelease && status.release !== libraryRelease) location.reload();
       else {
         libraryRelease = status.release;

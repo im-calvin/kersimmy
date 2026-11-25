@@ -60,7 +60,8 @@ button.act{border:1px solid var(--line);background:var(--control)}
   border-radius:3px;transition:background .12s ease}
 #cn p.hit{background:var(--reading);box-shadow:-.6rem 0 0 -.55rem var(--accent-line)}
 #cn p{cursor:pointer;user-select:text}
-#alignment-dialog{width:min(65rem,94vw);max-height:80vh;color:var(--ink);background:var(--bg);border:1px solid var(--line)}
+#alignment-dialog{width:min(65rem,94vw);max-height:80vh;padding:1rem;border-radius:8px;
+  color:var(--ink);background:var(--bg);border:1px solid var(--line)}
 #alignment-dialog table{width:100%;border-collapse:collapse;table-layout:fixed}
 #alignment-dialog th,#alignment-dialog td{text-align:left;vertical-align:top;padding:.5rem;border-bottom:1px solid var(--line);overflow-wrap:anywhere;white-space:pre-wrap}
 #alignment-dialog th:first-child{width:4rem}
@@ -73,7 +74,9 @@ button.act{border:1px solid var(--line);background:var(--control)}
 .reader-options label{margin-top:.45rem}
 .reader-menu input{width:100%;font:inherit;color:var(--ink);background:var(--control);
   border:1px solid var(--line);border-radius:4px;padding:.3rem .4rem}
-#snapshot-options:not([hidden]){display:grid;gap:.35rem;border-top:1px solid var(--line);padding-top:.45rem}
+#snapshot-options{display:grid;gap:.35rem;border-top:1px solid var(--line);padding-top:.45rem}
+#snapshot-options label[hidden]{display:none}
+#snapshot-toggle:disabled{opacity:.6;cursor:default}
 #snapshot-status{margin:0;color:var(--heading)}
 #snapshot-status:empty{display:none}
 #pane{position:relative;flex:1;display:flex;flex-direction:column;min-width:0}
@@ -226,7 +229,7 @@ ta.addEventListener('blur',()=>{ if(dirty)commit(); });
 
 /* ---------- chapter switching ---------- */
 function load(n){
-  if(n!==cur&&!closeComments(false)){sel.value=cur;return}
+  if(n!==cur&&!closeComments(false,true,()=>load(n))){sel.value=cur;return}
   if(dirty)commit();
   pos[cur]=cn.scrollTop;
   cur=n; lastIn=0; localStorage.setItem(CKEY,n);
@@ -289,12 +292,11 @@ ta.addEventListener('beforeinput',e=>{
       return;
     }
   }
-  if(!smart)return;
   const d=e.data, s=ta.selectionStart, prev=ta.value[s-1]||'';
   let rep=null, from=s;
-  if(d==='"'){ rep=(s===0||/[\s([{—‘“]/.test(prev))?'“':'”'; }
-  else if(d==="'"){ rep=(s===0||/[\s([{—]/.test(prev))?'‘':'’'; }
-  else if(d==='-'&&prev==='-'){ rep='—'; from=s-1; }
+  if((smart||window.readerStart)&&d==='-'&&prev==='-'){ rep='—'; from=s-1; }
+  else if(smart&&d==='"'){ rep=(s===0||/[\s([{—‘“]/.test(prev))?'“':'”'; }
+  else if(smart&&d==="'"){ rep=(s===0||/[\s([{—]/.test(prev))?'‘':'’'; }
   if(rep===null)return;
   e.preventDefault();
   ta.setRangeText(rep,from,ta.selectionEnd,'end');
@@ -473,7 +475,7 @@ function updateSync(force,fromScroll,reading=null){
   }
   const first=elements[0], offset=start-english;
   const label=start===end?String(start):start+'–'+end;
-  al.textContent='EN '+english+' ↔ 中文 '+(first?label:'—')
+  al.textContent='中文 '+(first?label:'—')+' ↔ EN '+english
     +(offset?' (offset '+(offset>0?'+':'')+offset+')':'');
   setSourceHighlights(elements);
   if(fromScroll){
@@ -648,7 +650,7 @@ function openAlignment(){
   }
   dialog.querySelector('p').textContent='Draft paragraph offset: '+offset+'. Blank lines and the chapter heading are skipped.';
   document.querySelector('.reader-options').open=false;
-  dialog.showModal();
+  window.readerDialogs.attach(dialog).showModal();
 }
 function resetAlign(){
   const groups=alignmentGroups[cur], english=currentEnglish;
@@ -720,7 +722,7 @@ function runFind(more=false){
       +' more. <button type="button" onclick="runFind(true)">show more</button></div>':'');
 }
 
-/* ---------- project statistics ---------- */
+/* ---------- book statistics ---------- */
 const WKEY='__PFX__draft:wpp';
 function allBodies(){
   return Object.keys(store).map(Number).filter(n=>!isNaN(n))
@@ -761,7 +763,7 @@ function renderStats(){
   const card=(k,v,s)=>'<div class="card"><div class="k">'+k+'</div><div class="v">'
     +v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
   document.getElementById('cards').innerHTML=
-     card('time on project',fmtDur(msTotal),'recorded chapter time')
+     card('time on this book',fmtDur(msTotal),'recorded chapter time')
     +card('english words',wTotal.toLocaleString(),
           bodies.length+(bodies.length===1?' chapter':' chapters')+' drafted')
     +card('chinese translated',cjk.toLocaleString(),
@@ -840,7 +842,7 @@ function projectSnapshot(){
   if(dirty)commit();
   pos[cur]=cn.scrollTop;
   const corpus=window.CORPUS;
-  if(!corpus||!corpus.length){ind.textContent='corpus.js is needed for a full project backup';return}
+  if(!corpus||!corpus.length){ind.textContent='corpus.js is needed for a book backup';return}
   const readJSON=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback}catch(e){return fallback}};
   const legacyStorage={};
   for(let i=0;i<localStorage.length;i++){
@@ -863,21 +865,26 @@ function fullProjectBackup(){
   const data=projectSnapshot();
   if(!data)return;
   const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
-  const a=document.createElement('a');a.href=url;a.download='__SLUG__-full-project-'+stamp()+'.json';a.click();
+  const a=document.createElement('a');a.href=url;a.download='__SLUG__-book-backup-'+stamp()+'.json';a.click();
   setTimeout(()=>URL.revokeObjectURL(url),10000);
-  ind.textContent='full project saved — use Restore backup in the web library';
+  ind.textContent='book backup saved — use Restore backup in the web library';
 }
 let snapshotTimer, snapshotDirectory, snapshotWriting=false;
-const snapshotOptions=document.getElementById('snapshot-options');
 const snapshotButton=document.getElementById('snapshot-toggle');
 const snapshotInterval=document.getElementById('snapshot-minutes');
 const snapshotStatus=document.getElementById('snapshot-status');
-snapshotOptions.hidden=!!window.readerStart||typeof window.showDirectoryPicker!=='function';
+if(typeof window.showDirectoryPicker!=='function'){
+  snapshotButton.disabled=true;
+  snapshotInterval.closest('label').hidden=true;
+  snapshotStatus.textContent=window.isSecureContext
+    ? 'Automatic folder backups need a browser with folder access. Use Back up book to download a copy.'
+    : 'Open the reader over HTTPS or on localhost for folder access. Use Back up book to download a copy.';
+}
 
 function stopSnapshots(message){
   clearInterval(snapshotTimer);
   snapshotDirectory=null;
-  snapshotButton.textContent='Choose snapshot folder';
+  snapshotButton.textContent='Choose book backup folder';
   snapshotInterval.disabled=false;
   snapshotStatus.textContent=message;
 }
@@ -887,10 +894,11 @@ async function writeProjectSnapshot(){
   const directory=snapshotDirectory;
   let writer;
   try{
-    const data=projectSnapshot();
+    const data=window.readerSnapshot?window.readerSnapshot():projectSnapshot();
     if(!data)throw new Error('Keep corpus.js beside the reader to make snapshots.');
     const timestamp=data.exportedAt.replace(/[:.]/g,'-');
-    const file=await directory.getFileHandle('__SLUG__-snapshot-'+timestamp+'.json',{create:true});
+    const prefix=data.books[0].book.id||'__SLUG__';
+    const file=await directory.getFileHandle(prefix+'-snapshot-'+timestamp+'.json',{create:true});
     writer=await file.createWritable();
     await writer.write(JSON.stringify(data));
     await writer.close();
@@ -999,7 +1007,7 @@ const helpLayout=new ResizeObserver(positionDraftHelp);
 helpLayout.observe(draftHelp);
 helpLayout.observe(ta);
 addEventListener('keydown',e=>{
-  if(e.target.closest('dialog'))return;
+  if(e.target.closest('.app-dialog'))return;
   if(e.key==='Escape'&&!draftHelp.hidden){e.preventDefault();closeDraftHelp(true);return}
   if(e.key==='Escape'){
     const menu=document.querySelector('.reader-menu[open]');
@@ -1044,6 +1052,8 @@ PAGE = """<!DOCTYPE html>
 <meta name="robots" content="noindex,nofollow">
 <title>Draft</title>
 <script data-reader-theme>{theme_script}</script>
+<style>{dialog_css}</style>
+<script data-app-dialogs>{dialog_script}</script>
 <style>{css}</style>
 </head>
 <body>
@@ -1070,16 +1080,16 @@ PAGE = """<!DOCTYPE html>
   <button onclick="copyDocs()" title="copy with Chapter heading (Cmd+Enter)">Copy for Google Docs</button>
   <button onclick="backup()" title="download every drafted chapter as one timestamped .txt">Draft text backup</button>
   <button onclick="fullProjectBackup()"
-    title="source, drafts, timings, settings and review text for the web library">Full project backup</button>
+    title="source, drafts, timings, settings and review text for the web library">Back up book</button>
   <!-- hosted-import-drafts -->
-  <section id="snapshot-options" hidden>
-    <label>Snapshot interval (minutes) <input type="number" id="snapshot-minutes" min="1" max="1440" value="15" required></label>
-    <button type="button" id="snapshot-toggle">Choose snapshot folder</button>
+  <section id="snapshot-options">
+      <label>Snapshot interval (minutes) <input type="number" id="snapshot-minutes" min="1" max="1440" value="5" required></label>
+    <button type="button" id="snapshot-toggle">Choose book backup folder</button>
     <p id="snapshot-status" role="status"></p>
   </section>
   </div></details>
   <button id="italic" type="button" aria-label="Italic" title="italic (Cmd/Ctrl+I)" aria-pressed="false" onmousedown="event.preventDefault()" onclick="toggleItalic()">I</button>
-  <button class="act" onclick="openStats()" title="project statistics">stats</button>
+  <button class="act" onclick="openStats()" title="book statistics">stats</button>
   <button class="act" onclick="openFind()"
     title="Find across the book (Cmd+Shift+F, uses your selection)">find</button>
 </header>
@@ -1147,7 +1157,7 @@ PAGE = """<!DOCTYPE html>
 </div>
 <div id="stats">
   <div class="top">
-    <b>Project statistics</b>
+    <b>Book statistics</b>
     <span class="sp"></span>
     <label>words per page <input id="wpp" type="number" min="50" max="1000"
       onchange="setWpp()"></label>
@@ -1166,7 +1176,7 @@ PAGE = """<!DOCTYPE html>
 
 
 ALIGNMENT_BUTTON = '<button type="button" aria-controls="alignment-dialog" onclick="openAlignment()">Aligned preview</button>'
-ALIGNMENT_DIALOG = """<dialog id="alignment-dialog" aria-labelledby="alignment-title">
+ALIGNMENT_DIALOG = """<div class="app-dialog" role="dialog" hidden id="alignment-dialog" aria-labelledby="alignment-title">
   <h2 id="alignment-title">Aligned preview</h2>
   <p></p>
   <div class="alignment-rows">
@@ -1175,8 +1185,8 @@ ALIGNMENT_DIALOG = """<dialog id="alignment-dialog" aria-labelledby="alignment-t
       <tbody></tbody>
     </table>
   </div>
-  <form method="dialog"><button class="act">Close</button></form>
-</dialog>"""
+  <button type="button" class="act" onclick="document.getElementById('alignment-dialog').close()">Close</button>
+</div>"""
 
 
 def render_page(cfg, chapters, illustration=None):
@@ -1195,6 +1205,8 @@ def render_page(cfg, chapters, illustration=None):
     js = js.replace('__GIF__', gif)
     return PAGE.replace('<script src="corpus.js"></script>', draft_comments.HTML + '<script src="corpus.js"></script>').format(css=reader_theme.CSS + CSS + draft_comments.CSS + draft_editor.CSS, js=js,
             theme_script=reader_theme.SCRIPT, theme_control=reader_theme.CONTROL,
+            dialog_css=(Path(__file__).resolve().parent.parent / 'web/dialogs.css').read_text(encoding='utf-8'),
+            dialog_script=(Path(__file__).resolve().parent.parent / 'web/dialogs.js').read_text(encoding='utf-8'),
             alignment='' if inline_alignment else ALIGNMENT_DIALOG,
             alignment_button='' if inline_alignment else ALIGNMENT_BUTTON)
 

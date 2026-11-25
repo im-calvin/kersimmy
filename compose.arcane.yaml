@@ -11,7 +11,7 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/api/status', timeout=3).close()"]
     environment:
-      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-300}"
       BACKUP_KEEP: "${BACKUP_KEEP:-96}"
     read_only: true
     tmpfs:

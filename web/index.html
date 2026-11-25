@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Library · Kersimmy</title><link rel="icon" href="site-icon.png" type="image/png"><script src="theme.js"></script><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="site-brand.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Library · Kersimmy</title><link rel="icon" href="site-icon.png" type="image/png"><script src="theme.js"></script><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="site-brand.css"><link rel="stylesheet" href="dialogs.css"><script src="dialogs.js"></script></head>
 <body>
 <main class="library">
   <header class="masthead"><a class="wordmark" href="./"><img class="site-icon" src="site-icon.png" alt=""> Kersimmy</a>
@@ -11,11 +11,11 @@
   <div class="library-actions"><button class="primary" id="add-book">＋ Add manuscript</button><button id="restore">Restore backup</button><button id="backup-library">Back up library</button><input type="file" id="restore-file" accept=".json,application/json" hidden></div>
   <p id="message" role="status" aria-live="polite"></p>
   <section id="books" class="book-grid" aria-label="Your books"></section>
-  <section id="current-project" class="current-project" hidden><div><p class="eyebrow">FROM YOUR LOCAL PROJECT</p><h2 id="current-title">Current manuscript</h2><p>Bring the source into your library.</p></div><div class="actions"><button id="import-current">Add to library</button><a id="original-reader" class="button subtle" href="legacy/index.html" hidden>Original reader ↗</a></div></section>
+  <section id="current-project" class="current-project" hidden><div><p class="eyebrow">FROM YOUR LOCAL READER</p><h2 id="current-title">Current manuscript</h2><p>Bring the source into your library.</p></div><div class="actions"><button id="import-current">Add to library</button><a id="original-reader" class="button subtle" href="legacy/index.html" hidden>Original reader ↗</a></div></section>
   <footer><p>Books and drafts are saved in SQLite on your server, with automatic backups.</p></footer>
 </main>
 <img class="site-corner" src="site-icon.png" alt="">
-<dialog id="import-dialog" aria-labelledby="import-title">
+<div class="app-dialog" role="dialog" hidden id="import-dialog" aria-labelledby="import-title">
   <form id="import-form">
     <div class="dialog-heading"><h2 id="import-title">Add a manuscript</h2><button type="button" class="icon" id="close-import" aria-label="Close import">×</button></div>
     <label class="file-box">Choose a manuscript<input id="manuscript" type="file" accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required><small>Plain text or Word .docx · up to 30 MB · parsed by Python on your server</small></label>
@@ -34,11 +34,11 @@
     </section>
     <div class="dialog-actions"><button type="button" id="parse">Preview manuscript</button><button type="submit" class="primary" id="confirm-import" disabled>Add to library</button></div>
   </form>
-</dialog>
-<dialog id="volumes-dialog" aria-labelledby="volumes-title">
+</div>
+<div class="app-dialog" role="dialog" hidden id="volumes-dialog" aria-labelledby="volumes-title">
   <form id="volumes-form">
     <div class="dialog-heading"><h2 id="volumes-title">Book settings</h2><button type="button" id="close-volumes" aria-label="Close book settings">×</button></div>
-    <p id="volumes-book"></p>
+    <label>Book name<input id="book-settings-name" required maxlength="200"></label>
     <div class="actions">
       <img id="book-settings-icon" class="book-card-icon" alt="" hidden>
       <button type="button" id="choose-book-icon">Set book icon</button>
@@ -54,11 +54,15 @@
     <div id="volume-chapters"></div>
     <details id="book-settings-danger">
       <summary>Remove book</summary>
-      <button type="button" id="delete-book" class="subtle error">Delete book</button>
+      <p>Deleting this book also removes its saved drafts and comments.</p>
+      <label><span>Type <code>I am an idiot sandwich</code> to confirm</span>
+        <input id="delete-book-confirmation" autocomplete="off" spellcheck="false">
+      </label>
+      <button type="button" id="delete-book" class="subtle error" disabled>Delete book</button>
     </details>
     <p id="volumes-error" class="error" role="alert"></p>
-    <div class="dialog-actions"><button type="button" id="cancel-volumes">Close</button><button type="submit" class="primary" id="save-volumes">Save chapters</button></div>
+    <div class="dialog-actions"><button type="button" id="cancel-volumes">Close</button><button type="submit" class="primary" id="save-volumes">Save changes</button></div>
   </form>
-</dialog>
+</div>
 <script type="module" src="library.js"></script>
 </body></html>

@@ -9,7 +9,6 @@
   background: var(--bg);
   font-size: 14px;
 }
-#glossary-dialog::backdrop { background: var(--scrim); }
 #glossary-dialog h2 { margin: 0; font-size: 18px; }
 #glossary-dialog .glossary-table { overflow-x: auto; }
 #glossary-dialog table { width: 100%; border-collapse: collapse; }

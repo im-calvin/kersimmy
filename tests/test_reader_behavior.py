@@ -194,7 +194,7 @@ def test_chapter_drafts_reload_and_alignment(reader):
     page.locator('#ta').press('ControlOrMeta+End')
     page.locator('#ta').press('ArrowLeft')
     expect(page.locator('#cn p.hit')).to_have_attribute('id', 'c1p3')
-    expect(page.locator('#al')).to_have_text('EN 3 ↔ 中文 3')
+    expect(page.locator('#al')).to_have_text('中文 3 ↔ EN 3')
     page.locator('#sel').select_option('2')
     expect(page.locator('#ta')).to_have_js_property('value', '')
     page.locator('#ta').fill('A separate second chapter.')
@@ -262,7 +262,7 @@ def test_exports_preserve_source_and_draft(reader):
     assert text.count('Chapter 1') == 1
     assert 'Third paragraph.' in text
     with page.expect_download() as event:
-        menu.get_by_role('button', name='Full project backup', exact=True).click()
+        menu.get_by_role('button', name='Back up book', exact=True).click()
     payload = json.loads(Path(event.value.path()).read_text(encoding='utf-8'))
     assert payload['version'] == 1
     entry = payload['books'][0]
@@ -281,6 +281,58 @@ def test_exports_preserve_source_and_draft(reader):
         page.goto(f'{base}/books/{book_id}/draft')
         page.get_by_role('button', name='stats', exact=True).click()
         expect(page.locator('#cards')).to_contain_text('1h 10m')
+
+
+def test_draft_writes_local_snapshots_every_five_minutes(reader):
+    page = reader['page']
+    page.add_init_script("""window.snapshots = [];
+        window.showDirectoryPicker = async () => ({
+            getFileHandle: async name => ({
+                createWritable: async () => ({
+                    write: async text => window.snapshots.push({name, data: JSON.parse(text)}),
+                    close: async () => {},
+                }),
+            }),
+        });
+    """)
+    page.reload()
+    page.clock.install()
+    page.locator('#ta').fill(DRAFT)
+    saved(reader)
+    menu = open_exports(page)
+    expect(menu.get_by_label('Snapshot interval (minutes)')).to_have_value('5')
+    menu.get_by_role('button', name='Choose book backup folder').click()
+    page.wait_for_function('snapshots.length === 1')
+    if reader['mode'] == 'hosted':
+        page.context.set_offline(True)
+    page.locator('#ta').fill('A newer draft.')
+    page.clock.fast_forward(295000)
+    assert page.evaluate('snapshots.length') == 1
+    page.clock.fast_forward(5000)
+    page.wait_for_function('snapshots.length === 2')
+    first, second = page.evaluate('snapshots')
+    assert first['name'] != second['name']
+    assert first['data']['books'][0]['state']['drafts']['1'] == DRAFT
+    assert second['data']['version'] == 1
+    assert second['data']['books'][0]['state']['drafts']['1'] == 'A newer draft.'
+    assert second['data']['books'][0]['book']['chapters']
+
+
+def test_draft_offers_backup_without_folder_access(reader):
+    page = reader['page']
+    page.add_init_script('window.showDirectoryPicker = undefined')
+    page.reload()
+    menu = open_exports(page)
+    folder = menu.get_by_role('button', name='Choose book backup folder')
+    expect(folder).to_be_visible()
+    expect(folder).to_be_disabled()
+    expect(menu.get_by_label('Snapshot interval (minutes)')).to_be_hidden()
+    expect(menu.locator('#snapshot-status')).to_contain_text('Use Back up book')
+    with page.expect_download() as download:
+        menu.get_by_role('button', name='Back up book', exact=True).click()
+    payload = json.loads(Path(download.value.path()).read_text(encoding='utf-8'))
+    assert payload['version'] == 1
+    assert payload['books'][0]['book']['chapters']
 
 
 def test_review_text_is_separate_and_persistent(reader):
@@ -303,10 +355,27 @@ def test_review_text_is_separate_and_persistent(reader):
     expect(page.locator('#ta')).to_have_js_property('value', DRAFT)
 
 
+def test_typing_two_hyphens_inserts_an_em_dash(reader):
+    page = reader['page']
+    editor = page.locator('#ta')
+    editor.fill('Before ')
+    editor.press('End')
+    editor.press_sequentially('--')
+    expect(editor).to_have_js_property('value', 'Before —')
+    editor.press('ControlOrMeta+z')
+    expect(editor).to_have_js_property('value', 'Before -')
+    editor.press('End')
+    editor.press_sequentially('-after')
+    expect(editor).to_have_js_property('value', 'Before —after')
+    saved(reader)
+    page.reload()
+    expect(editor).to_have_js_property('value', 'Before —after')
+
+
 def test_local_smart_punctuation_preference(reader):
     if reader['mode'] != 'local':
         import pytest
-        pytest.skip('Hosted smart punctuation is intentionally disabled')
+        pytest.skip('Hosted smart quotes are intentionally disabled')
     page = reader['page']
     page.locator('#ta').press_sequentially('"Hello" --')
     expect(page.locator('#ta')).to_have_js_property('value', '“Hello” —')

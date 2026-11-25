@@ -122,10 +122,10 @@ def generated_page(book, mode):
         page = page.replace('<header>','<header data-save-state="saving"><a href="/">← Library</a><button type="button" id="open-glossary">Glossary</button>')
         page = page.replace('</head>', '<link rel="stylesheet" href="/glossary-poc.css"></head>')
         page = page.replace('onclick="fullProjectBackup()"','onclick="window.readerBackup()"')
-        page = page.replace('<div class="cards" id="cards"></div>','<section id="artwork"><img id="project-gif" alt="Project GIF" hidden><div><button id="choose-gif">Choose GIF</button><button id="remove-gif">Remove GIF</button><input id="gif-file" type="file" accept=".gif,image/gif" hidden><p id="gif-status" role="status"></p></div></section><div class="cards" id="cards"></div>')
+        page = page.replace('<div class="cards" id="cards"></div>','<section id="artwork"><img id="project-gif" alt="Book GIF" hidden><div><button id="choose-gif">Choose GIF</button><button id="remove-gif">Remove GIF</button><input id="gif-file" type="file" accept=".gif,image/gif" hidden><p id="gif-status" role="status"></p></div></section><div class="cards" id="cards"></div>')
         page = page.replace('<!-- hosted-import-drafts -->', '<button onclick="window.readerImportDrafts()">Import drafts</button>')
         page = page.replace("let store=read(), pos=readPos(), cur=+readerStorage.getItem(CKEY)||CH[0].no;", "let store=read(), pos=readPos(), cur=Number(readerStorage.getItem(CKEY) ?? CH[0].no);")
-        hook = 'window.readerHasUnsaved=()=>dirty||!!document.querySelector("dialog[open]"); window.readerCommit=()=>{if(dirty)commit()}; window.readerInstallDrafts=(drafts)=>{if(dirty)commit();for(const n of Object.keys(drafts)){delete italics[n];for(const note of comments[n]||[])if(drafts[n].slice(note.start,note.end)!==note.quote)note.detached=true}Object.assign(store,drafts);readerStorage.setItem(KEY,JSON.stringify(store));readerStorage.setItem(IKEY,JSON.stringify(italics));readerStorage.setItem(NKEY,JSON.stringify(comments));load(cur)};'
+        hook = 'window.readerHasUnsaved=()=>dirty||!!document.querySelector(".app-dialog[open]"); window.readerCommit=()=>{if(dirty)commit()}; window.readerInstallDrafts=(drafts)=>{if(dirty)commit();for(const n of Object.keys(drafts)){delete italics[n];for(const note of comments[n]||[])if(drafts[n].slice(note.start,note.end)!==note.quote)note.detached=true}Object.assign(store,drafts);readerStorage.setItem(KEY,JSON.stringify(store));readerStorage.setItem(IKEY,JSON.stringify(italics));readerStorage.setItem(NKEY,JSON.stringify(comments));load(cur)};'
         # Original overlays remain in their templates; clicking their surrounding
         # backdrop or empty outer panel closes them.
         hook += "for(const [id,close] of [['find',closeFind],['stats',closeStats]]){const panel=document.getElementById(id);panel.addEventListener('click',e=>{if(e.target===panel)close()})}"
@@ -134,7 +134,7 @@ def generated_page(book, mode):
   <strong id="glossary-tooltip-english"></strong>
   <p id="glossary-tooltip-note"></p>
 </aside>
-<dialog id="glossary-dialog" aria-labelledby="glossary-title">
+<div class="app-dialog" role="dialog" hidden id="glossary-dialog" aria-labelledby="glossary-title">
   <h2 id="glossary-title">Glossary</h2>
   <p>Saved for this book in this browser.</p>
   <div class="glossary-table">
@@ -148,7 +148,7 @@ def generated_page(book, mode):
     <button type="button" class="act" id="glossary-add">Add term</button>
     <button type="button" class="act" id="glossary-close">Close</button>
   </div>
-</dialog>
+</div>
 <script type="module" src="/glossary-poc.js"></script>
 </body>''')
     else:
@@ -319,6 +319,11 @@ class Handler(SimpleHTTPRequestHandler):
                     else:
                         volumes = data.get('volumes')
                         titles = data.get('titles', {})
+                        if 'bookTitle' in data:
+                            book_title = data['bookTitle']
+                            if not isinstance(book_title,str) or not 1<=len(book_title.strip())<=200:
+                                raise ValueError('Book name must be between 1 and 200 characters.')
+                            book['title'] = book_title.strip()
                         numbers = {str(c['no']) for c in book['chapters']}
                         if not isinstance(volumes,dict) or set(volumes)!=numbers:
                             raise ValueError('Volume assignments must include each chapter exactly once.')
@@ -371,7 +376,7 @@ def main():
     parser.add_argument('--data',default=os.environ.get('READER_DATA',str(ROOT/'data')))
     parser.add_argument('--site',default=str(ROOT/'dist'))
     args=parser.parse_args()
-    store=Store(args.data,int(os.environ.get('BACKUP_INTERVAL_SECONDS','900')),
+    store=Store(args.data,int(os.environ.get('BACKUP_INTERVAL_SECONDS','300')),
                 int(os.environ.get('BACKUP_KEEP','96')),
                 portable_json=os.environ.get('PORTABLE_JSON_SNAPSHOTS')=='1')
     stop=threading.Event();threading.Thread(target=store.run_backups,args=(stop,),daemon=True).start()

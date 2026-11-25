@@ -112,16 +112,21 @@ window.readerStart = async function(config, startOriginal) {
     }
   }
   const download=(name,data)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)};
-  const backup=()=>{
+  const backupData=()=>{
     window.readerCommit?.();
-    download('reader-recovery-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',{format:'translation-reader',version:1,books:[{book,state:snapshot()}]});
+    return {format:'translation-reader',version:1,exportedAt:new Date().toISOString(),books:[{book,state:snapshot()}]};
+  };
+  const backup=()=>{
+    const data=backupData();
+    download('reader-recovery-'+data.exportedAt.replace(/[:.]/g,'-')+'.json',data);
   };
   window.readerBackup=backup;
+  if(draft)window.readerSnapshot=backupData;
   recovery.onclick=backup;
   const retry=document.createElement('button');retry.textContent='Retry save';retry.onclick=()=>{if(!blocked)save();else show('Download a recovery backup to keep your edits.',true)};
   const useServer=document.createElement('button');useServer.textContent='Use server version';useServer.hidden=true;
   useServer.onclick=async()=>{
-    if(!confirm('Discard this browser’s conflicting changes? Download a recovery backup first if you want to keep them.'))return;
+    if(!await window.readerDialogs.confirm('Discard this browser’s conflicting changes? Download a recovery backup first if you want to keep them.','Use server version'))return;
     const version=generation;
     try {
       await request('books/'+config.id+'/state');
@@ -203,8 +208,8 @@ window.readerStart = async function(config, startOriginal) {
     if(config.mode==='draft')editor.addEventListener('input',()=>{window.readerCommit?.()});
     if(config.mode==='review') {
       const use=document.createElement('button');use.textContent='use current drafts';
-      use.onclick=()=>{
-        if(Object.values(state.reviewEnglish||{}).some(t=>t.trim())){if(!confirm('Replace review text with current drafts? A recovery backup will be downloaded first.'))return;backup();}
+      use.onclick=async()=>{
+        if(Object.values(state.reviewEnglish||{}).some(t=>t.trim())){if(!await window.readerDialogs.confirm('Replace review text with current drafts? A recovery backup will be downloaded first.','Replace review text'))return;backup();}
         const text=book.chapters.filter(c=>state.drafts[c.no]?.trim()).map(c=>'Chapter '+c.no+'\n'+state.drafts[c.no].replace(/^\s*(?:Chapter|Ch\.?)\s+\d+[^\n]*\n/i,'')).join('\n\n');
         window.readerUseDrafts(text);
       };
@@ -229,7 +234,7 @@ window.readerStart = async function(config, startOriginal) {
           for(const line of text.replace(/\r/g,'').split('\n')){const m=line.match(/^Chapter (\d+)\s*$/);if(m){flush();no=Number(m[1]);lines=[]}else if(no!==null)lines.push(line)}flush();
           if(!Object.keys(drafts).length)throw Error('No Chapter N headings found.');
           let replace=false;
-          if(Object.keys(drafts).some(n=>snapshot().drafts[n]?.trim()))replace=confirm('Replace matching existing drafts? Cancel imports into empty chapters only.');
+          if(Object.keys(drafts).some(n=>snapshot().drafts[n]?.trim()))replace=await window.readerDialogs.confirm('Replace matching existing drafts?','Replace drafts','Import into empty chapters');
           if(replace)backup();const existing=snapshot().drafts;
           window.readerInstallDrafts(Object.fromEntries(Object.entries(drafts).filter(([n])=>replace||!existing[n]?.trim())));
           show('Draft text imported; syncing…',false,'saving');
@@ -237,10 +242,10 @@ window.readerStart = async function(config, startOriginal) {
       };input.click();
     };
     setInterval(async()=>{
-      if(document.hidden||pending||saving||blocked||window.readerHasUnsaved?.())return;
+      if(document.hidden||pending||saving||blocked||document.querySelector('.app-confirm[open]')||window.readerHasUnsaved?.())return;
       try {
         const {data:remote,release}=await request('books/'+config.id+'/state','GET',undefined,true);
-        if(pending||saving||blocked||window.readerHasUnsaved?.())return;
+        if(pending||saving||blocked||document.querySelector('.app-confirm[open]')||window.readerHasUnsaved?.())return;
         if(remote.revision!==revision||(config.release&&release!==config.release))location.reload();
         else if(offline){offline=false;show('Synced to server');}
       }catch{/* Retry on the next poll. */}

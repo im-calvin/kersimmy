@@ -99,7 +99,7 @@ with sync_playwright() as playwright:
         assert result==409
         print('PASS: separate-browser sync, offline recovery/retry, stale-write conflict rejection',flush=True)
         page.locator('#exports-trigger').click()
-        with page.expect_download() as event:page.get_by_role('button',name='Full project backup',exact=True).click()
+        with page.expect_download() as event:page.get_by_role('button',name='Back up book',exact=True).click()
         payload=json.loads(Path(event.value.path()).read_text())
         state=payload['books'][0]['state']
         assert state['drafts']['1']=='Pending offline text.'

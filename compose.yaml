@@ -6,7 +6,7 @@ services:
     ports:
       - "127.0.0.1:8888:8888"
     environment:
-      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-900}"
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-300}"
       PORTABLE_JSON_SNAPSHOTS: "${PORTABLE_JSON_SNAPSHOTS:-1}"
       BACKUP_KEEP: "96"
     read_only: true

@@ -164,6 +164,9 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     card = page.locator('.book-card').filter(has=page.get_by_role('heading', name='Organize existing', exact=True))
     card.get_by_role('button', name='Settings', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
+    name = page.get_by_role('textbox', name='Book name', exact=True)
+    expect(name).to_have_value('Organize existing')
+    name.fill('Stale rename')
     page.locator('#select-all-chapters').check()
     page.locator('#volume-name').fill('First volume <safe>')
     page.locator('#assign-volume').click()
@@ -177,6 +180,11 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     page.locator('#cancel-volumes').click()
     card.get_by_role('button', name='Settings', exact=True).click()
     expect(page.locator('#volumes-dialog')).to_be_visible()
+    expect(name).to_have_value('Organize existing')
+    name.fill('   ')
+    page.get_by_role('button', name='Save changes').click()
+    expect(page.locator('#volumes-error')).to_contain_text('Book name must be between 1 and 200 characters')
+    name.fill('  Renamed book <safe>  ')
     page.get_by_role('textbox', name='Chapter 1', exact=True).fill('New title <safe>')
     page.locator('#volume-chapters input[data-chapter="1"]').check()
     page.locator('#volume-name').fill('First volume <safe>')
@@ -189,8 +197,10 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     with page.expect_request('**/volumes') as volume_request:
         page.locator('#save-volumes').click()
     assert volume_request.value.post_data_json['volumes'] == {'1': 'First volume <safe>', '2': 'Second volume'}
-    expect(page.locator('#message')).to_contain_text('Chapter changes saved')
+    expect(page.locator('#message')).to_contain_text('Book settings saved')
+    expect(page.get_by_role('heading', name='Renamed book <safe>', exact=True)).to_be_visible()
     bundle = page.request.get(base + '/api/books/' + book_id + '/bundle').json()
+    assert bundle['book']['title'] == 'Renamed book <safe>'
     for key, value in state.items():
         assert bundle['state'][key] == (remote[key] if key == 'times' else value)
     assert bundle['state']['revision'] == 2
@@ -199,9 +209,11 @@ def test_organizing_existing_book_preserves_state_and_rejects_stale_writes(page,
     response = page.request.put(base + '/api/books/' + book_id + '/state', data={'state': remote, 'expectedRevision': 1})
     assert response.status == 409
     page.goto(base + '/books/' + book_id + '/draft')
+    expect(page).to_have_title('Renamed book <safe> · Draft')
     expect(page.locator('#sel optgroup').first).to_have_attribute('label', 'First volume <safe>')
     expect(page.locator('#sel option').first).to_contain_text('New title <safe>')
     expect(page.locator('#ta em')).to_have_text('First')
+    assert project(page)['book']['title'] == 'Renamed book <safe>'
 
 
 def test_volume_parser_preserves_existing_numbering_and_optional_detection(tmp_path):
@@ -292,8 +304,10 @@ def test_recheck_import_updates_titles_only_when_source_matches(page, reader_env
     assert after['state'] == {**before['state'], 'revision': 1}
 
 
-def test_delete_book_requires_confirmation_and_current_revision(page, reader_environment):
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_delete_book_requires_confirmation_and_current_revision(page, reader_environment, theme):
     base = reader_environment['base']
+    page.emulate_media(color_scheme=theme)
     created = page.request.post(base + '/api/import', data={'books': [{
         'book': {'title': 'Disposable deletion test', 'chapters': reader_environment['chapters']},
         'state': {'drafts': {'1': 'Saved draft.'}},
@@ -307,24 +321,30 @@ def test_delete_book_requires_confirmation_and_current_revision(page, reader_env
     delete = dialog.get_by_role('button', name='Delete book', exact=True)
     card.get_by_role('button', name='Settings', exact=True).click()
     expect(delete).to_be_hidden()
-    dialog.get_by_text('Remove book', exact=True).click()
+    remove = dialog.get_by_text('Remove book', exact=True)
+    remove.click()
+    confirmation = dialog.get_by_role('textbox', name='Type I am an idiot sandwich to confirm')
+    expect(confirmation).to_be_visible()
+    expect(delete).to_be_disabled()
 
-    page.once('dialog', lambda dialog: dialog.dismiss())
-    delete.click()
-    expect(card).to_be_visible()
+    confirmation.fill('wrong phrase')
+    expect(delete).to_be_disabled()
+    confirmation.fill('I am an idiot sandwich')
+    expect(delete).to_be_enabled()
+    confirmation.press('Enter')
+    expect(dialog).to_be_visible()
     assert page.request.get(endpoint).ok
-
-    page.once('dialog', lambda dialog: dialog.accept('wrong phrase'))
-    delete.click()
-    expect(page.locator('#volumes-error')).to_contain_text('The confirmation phrase did not match.')
-    assert page.request.get(endpoint).ok
+    remove.click()
+    expect(confirmation).to_be_hidden()
+    remove.click()
+    expect(confirmation).to_have_value('')
 
     state = page.request.get(endpoint + '/state').json()
     updated = page.request.put(endpoint + '/state', data={'state': state, 'expectedRevision': state['revision']})
     assert updated.ok
     rejected = page.request.delete(endpoint, data={'expectedRevision': updated.json()['revision']})
     assert rejected.status == 400
-    page.once('dialog', lambda dialog: dialog.accept('I am an idiot sandwich'))
+    confirmation.fill('I am an idiot sandwich')
     delete.click()
     expect(page.locator('#volumes-error')).to_contain_text('This book changed')
     assert page.request.get(endpoint).ok
@@ -332,7 +352,7 @@ def test_delete_book_requires_confirmation_and_current_revision(page, reader_env
     page.reload()
     card.get_by_role('button', name='Settings', exact=True).click()
     dialog.get_by_text('Remove book', exact=True).click()
-    page.once('dialog', lambda dialog: dialog.accept('I am an idiot sandwich'))
+    confirmation.fill('I am an idiot sandwich')
     delete.click()
     expect(card).to_have_count(0)
     expect(page.locator('#message')).to_contain_text('Deleted')
